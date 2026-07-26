@@ -1,0 +1,179 @@
+.timing-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--canvas);
+}
+
+/* ── Lyrics row ── */
+
+.tv-lyrics {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--canvas);
+}
+
+.tv-columns-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  overflow-x: auto;
+  padding: var(--space-sm) 0;
+}
+
+.tv-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+
+.tv-col-slot {
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Timing syllable states (overrides on shared WordCard) ── */
+
+.tv-syl-set {
+  color: var(--body);
+}
+
+.tv-syl-highlighted {
+  color: var(--success);
+  border-color: var(--success) !important;
+  background: rgba(48, 209, 88, 0.08);
+}
+
+.tv-syl-selected {
+  background: #ffd60a !important;
+  color: #201d1d !important;
+  border-color: #ffd60a !important;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Triangle cells ── */
+
+.tv-tri-group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.tv-tri-cell {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  cursor: pointer;
+}
+
+.tv-tri-set {
+  background: var(--accent);
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.tv-tri-unset {
+  background: var(--ash);
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.tv-tri-cursor {
+  background: #ffd60a !important;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+/* ── Dot cells (for separators) ── */
+
+.tv-dot-cell {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.tv-dot-set {
+  background: var(--accent);
+}
+
+.tv-dot-unset {
+  background: var(--ash);
+}
+
+.tv-dot-cursor {
+  background: #ffd60a;
+}
+
+/* ── Time ruler ── */
+
+.tv-ruler-wrap {
+  flex-shrink: 0;
+  height: 24px;
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--hairline);
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Waveform area ── */
+
+.tv-waveform-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--surface-dark);
+}
+
+/* ── Toolbar separator ── */
+
+.shared-toolbar-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--hairline);
+  flex-shrink: 0;
+}
+
+/* ── Compensation popup ── */
+
+.tv-comp-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
+.tv-comp-popup input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Bottom bar extras ── */
+
+.tv-time {
+  font-family: var(--font-mono);
+}
+
+.tv-beat-info {
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
+
+.tv-beat-info {
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
