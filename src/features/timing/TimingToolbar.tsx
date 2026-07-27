@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import type AudioEngine from './AudioEngine';
+import { Toolbar, ToolbarSep } from '../../shared/components/Toolbar';
 
 interface TimingToolbarProps {
   audioEngine: AudioEngine | null;
@@ -67,12 +68,12 @@ export default function TimingToolbar({
   const speedBtnRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="shared-toolbar">
-      <div className="shared-toolbar-scroll">
+    <>
+      <Toolbar>
         <button type="button" className="shared-btn" onClick={onImportAudio}>
           <span className="mdi mdi-music" /> {audioFileName || '导入音频'}
         </button>
-        <div className="shared-toolbar-sep" />
+        <ToolbarSep />
         <button
           type="button"
           className="shared-btn"
@@ -97,7 +98,7 @@ export default function TimingToolbar({
         >
           <span className="mdi mdi-skip-next" />
         </button>
-        <div className="shared-toolbar-sep" />
+        <ToolbarSep />
         <button
           type="button"
           className="shared-btn"
@@ -120,7 +121,7 @@ export default function TimingToolbar({
         >
           <span className="mdi mdi-chevron-double-right" />
         </button>
-        <div className="shared-toolbar-sep" />
+        <ToolbarSep />
         <button
           ref={compBtnRef}
           type="button"
@@ -146,7 +147,7 @@ export default function TimingToolbar({
         >
           <span className="mdi mdi-alpha-b-box" /> {speed.toFixed(1)}x
         </button>
-        <div className="shared-toolbar-sep" />
+        <ToolbarSep />
         <button
           type="button"
           className="shared-btn"
@@ -191,7 +192,7 @@ export default function TimingToolbar({
           {' · '}
           {(audioDuration / zoomLevel / 1000).toFixed(1)}s
         </span>
-      </div>
+      </Toolbar>
       {compInputOpen && compBtnRect && (
         <div
           className="tv-comp-popup"
@@ -282,6 +283,6 @@ export default function TimingToolbar({
           <span style={{ fontSize: '11px', color: 'var(--mute)' }}>x</span>
         </div>
       )}
-    </div>
+    </>
   );
 }

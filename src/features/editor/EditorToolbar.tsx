@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Lyrics } from '../../editor/lyrics';
 import ImportExportMenu from './ImportExportMenu';
+import { Toolbar, ToolbarSep } from '../../shared/components/Toolbar';
 
 interface EditorToolbarProps {
   lyrics: Lyrics;
@@ -33,10 +34,10 @@ export default function EditorToolbar({
   const [segBtnRect, setSegBtnRect] = useState<DOMRect | null>(null);
 
   return (
-    <div className="shared-toolbar">
-      <div className="shared-toolbar-scroll">
+    <>
+      <Toolbar>
         <ImportExportMenu lyrics={lyrics} onImport={onImport} />
-        <div className="shared-toolbar-sep" />
+        <ToolbarSep />
         <button
           type="button"
           className="shared-btn"
@@ -64,7 +65,7 @@ export default function EditorToolbar({
         >
           <span className="mdi mdi-delete" /> 删除
         </button>
-        <div className="shared-toolbar-sep" />
+        <ToolbarSep />
         <button
           ref={segBtnRef}
           type="button"
@@ -78,12 +79,12 @@ export default function EditorToolbar({
         >
           <span className="mdi mdi-file-tree" /> 分词
         </button>
-        <div className="shared-toolbar-sep" />
+        <ToolbarSep />
         <button type="button" className="shared-btn" onClick={onMetadata}>
           <span className="mdi mdi-tag-text" /> 元数据
         </button>
         <div className="ed-toolbar-spacer" />
-      </div>
+      </Toolbar>
       {segmentMenuOpen && selectedCount > 0 && segBtnRect && (
         <div
           className="ed-seg-menu"
@@ -113,6 +114,6 @@ export default function EditorToolbar({
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
