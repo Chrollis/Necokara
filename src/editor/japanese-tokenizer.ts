@@ -1,20 +1,17 @@
 /**
  * Browser-compatible Japanese tokenizer using kuromoji.js.
  *
- * Mimics jumanlrc's analyzeRuby with mora (拍)-level splitting:
+ * Splits into mora (拍)-level units:
  *   - 拗音 (ゃ/ゅ/ょ) merges with previous char → one mora
  *   - 促音 (っ/ッ) → standalone mora
  *   - 長音 (ー) → standalone mora
  *   - Everything else → its own mora
- *
- * Replaces the Electron-native jumanlrc addon so the lyrics editor
- * works both in Electron and in a plain browser (webpack-dev-server).
  */
 
 import kuromoji from 'kuromoji';
 import type { Tokenizer, IpadicFeatures } from 'kuromoji';
 
-// ─── Public types (matching jumanlrc's C++ API) ───────────────────
+// ─── Public types ─────────────────────────────────────────────────
 
 export interface WordResult {
   surface: string;

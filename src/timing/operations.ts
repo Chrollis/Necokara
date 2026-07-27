@@ -1,6 +1,5 @@
 import type { Lyrics } from '../editor/lyrics';
 import { isSeparatorWord } from '../editor/word';
-import { setSyllableTime, unsetSyllableTime } from '../editor/syllable';
 import type { TimingState } from './types';
 import { removePendingBeats } from './state';
 import inferSeparatorTimes from './separator';
@@ -43,8 +42,7 @@ export function setBeatTime(
   const ref = beatRefs[state.selectedBeatIndex];
   const word = lyrics.words[ref.wordIndex];
   if (isSeparatorWord(word)) return false;
-  const syl = word.syllables[ref.sylIndex];
-  word.syllables[ref.sylIndex] = setSyllableTime(syl, { msec: timeMs });
+  lyrics.setSyllableTime(ref.wordIndex, ref.sylIndex, { msec: timeMs });
   return true;
 }
 
@@ -55,9 +53,8 @@ export function clearBeatTime(lyrics: Lyrics, state: TimingState): boolean {
   const ref = beatRefs[state.selectedBeatIndex];
   const word = lyrics.words[ref.wordIndex];
   if (isSeparatorWord(word)) return false;
-  const syl = word.syllables[ref.sylIndex];
-  if (!syl.isSet) return false;
-  word.syllables[ref.sylIndex] = unsetSyllableTime(syl);
+  if (!word.syllables[ref.sylIndex].isSet) return false;
+  lyrics.unsetSyllableTime(ref.wordIndex, ref.sylIndex);
   return true;
 }
 

@@ -204,6 +204,62 @@ export class Lyrics {
     };
   }
 
+  unsetSyllableTime(wordIndex: number, sylIndex: number): void {
+    const word = this.words[wordIndex];
+    if (isSeparatorWord(word)) return;
+    const newSyllables = [...word.syllables];
+    newSyllables[sylIndex] = {
+      ...newSyllables[sylIndex],
+      time: createTime(0),
+      isSet: false,
+    };
+    this.words[wordIndex] = {
+      ...word,
+      syllables: newSyllables,
+    };
+  }
+
+  shiftSyllableTime(
+    wordIndex: number,
+    sylIndex: number,
+    deltaMs: number,
+  ): void {
+    const word = this.words[wordIndex];
+    if (isSeparatorWord(word)) return;
+    const syl = word.syllables[sylIndex];
+    if (!syl.isSet) return;
+    const newSyllables = [...word.syllables];
+    newSyllables[sylIndex] = {
+      ...newSyllables[sylIndex],
+      time: { msec: Math.max(0, syl.time.msec + deltaMs) },
+    };
+    this.words[wordIndex] = {
+      ...word,
+      syllables: newSyllables,
+    };
+  }
+
+  /** Remove multiple words by their indices (sorts descending internally). */
+  batchRemove(indices: number[]): void {
+    [...indices]
+      .sort((a, b) => b - a)
+      .forEach((i) => {
+        if (i >= 0 && i < this.words.length) this.words.splice(i, 1);
+      });
+  }
+
+  /** Replace one word with multiple words at the same position. */
+  replaceWords(index: number, newWords: Word[]): void {
+    if (index < 0 || index >= this.words.length) return;
+    this.words.splice(index, 1, ...newWords);
+  }
+
+  /** Clear all words and import new ones. */
+  clearAndImport(words: Word[]): void {
+    this.words.length = 0;
+    words.forEach((w) => this.words.push(w));
+  }
+
   setGlobalOffset(offsetMs: number): void {
     this.globalOffsetMs = offsetMs;
   }

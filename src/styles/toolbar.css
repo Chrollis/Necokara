@@ -84,3 +84,12 @@
 .ed-toolbar-spacer {
   flex: 1;
 }
+
+/* ── Toolbar separator ── */
+
+.shared-toolbar-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--hairline);
+  flex-shrink: 0;
+}

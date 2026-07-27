@@ -1,6 +1,5 @@
 import type { Lyrics } from '../editor/lyrics';
 import { isSeparatorWord, isNewlineWord } from '../editor/word';
-import { setSyllableTime } from '../editor/syllable';
 
 export default function inferSeparatorTimes(
   lyrics: Lyrics,
@@ -48,10 +47,7 @@ function inferLeftSeparator(
   if (leftSyl.isSet && rightSyl.isSet) {
     if (!initMode) {
       const avgTime = Math.floor((leftSyl.time.msec + rightSyl.time.msec) / 2);
-      lyrics.words[wordIndex - 1].syllables[0] = setSyllableTime(
-        lyrics.words[wordIndex - 1].syllables[0],
-        { msec: avgTime },
-      );
+      lyrics.setSyllableTime(wordIndex - 1, 0, { msec: avgTime });
     }
   } else if (rightSyl.isSet && !leftSyl.isSet) {
     const beatRefs = lyrics.getBeatRefs();
@@ -83,7 +79,7 @@ function inferRightSeparator(
 
   if (isNewlineWord(separatorWord) && rightWordIndex >= lyrics.words.length) {
     if (leftSyl.isSet && !initMode) {
-      separatorWord.syllables[0] = setSyllableTime(separatorWord.syllables[0], {
+      lyrics.setSyllableTime(wordIndex + 1, 0, {
         msec: leftSyl.time.msec + 500,
       });
     }
@@ -99,9 +95,7 @@ function inferRightSeparator(
   if (leftSyl.isSet && rightSyl.isSet) {
     if (!initMode) {
       const avgTime = Math.floor((leftSyl.time.msec + rightSyl.time.msec) / 2);
-      separatorWord.syllables[0] = setSyllableTime(separatorWord.syllables[0], {
-        msec: avgTime,
-      });
+      lyrics.setSyllableTime(wordIndex + 1, 0, { msec: avgTime });
     }
   } else if (leftSyl.isSet && !rightSyl.isSet) {
     const beatRefs = lyrics.getBeatRefs();

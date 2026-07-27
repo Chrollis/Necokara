@@ -7,7 +7,7 @@ export interface RecentFileEntry {
 }
 
 const STORAGE_KEY = 'necokara_recent';
-const MAX_RECENT = 10;
+const MAX_RECENT = 5;
 
 function loadRecent(): RecentFileEntry[] {
   try {

@@ -32,10 +32,4 @@ npm-debug.log.*
 *.sass.d.ts
 *.scss.d.ts
 
-#jumanlrc
-*.jppmdl
-
 # native addon build output
-src/native/jumanlrc/build/
-src/native/jumanlrc/node_modules/
-src/native/jumanlrc/package-lock.json

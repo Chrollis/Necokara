@@ -568,10 +568,9 @@ export default function TimingView({
       }
 
       const { wordIndex, sylIndex } = dragRef.current;
-      lyrics.words[wordIndex].syllables[sylIndex] = setSyllableTime(
-        lyrics.words[wordIndex].syllables[sylIndex],
-        { msec: Math.round(newTimeMs) },
-      );
+      lyrics.setSyllableTime(wordIndex, sylIndex, {
+        msec: Math.round(newTimeMs),
+      });
       updateState({ ...state });
       onUndoRecord?.();
       onRequestRender?.();
