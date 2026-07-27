@@ -8,6 +8,10 @@ export interface BeatRef {
   sylIndex: number;
 }
 
+export interface BeatRefWithSep extends BeatRef {
+  isSeparator: boolean;
+}
+
 export class Lyrics {
   words: Word[];
 
@@ -69,6 +73,25 @@ export class Lyrics {
 
   getBeatCount(): number {
     return this.getBeatRefs().length;
+  }
+
+  /** All beat refs including separator words (spaces/newlines). */
+  getAllBeatRefs(): BeatRefWithSep[] {
+    const refs: BeatRefWithSep[] = [];
+    this.words.forEach((word, wordIndex) => {
+      if (isSeparatorWord(word)) {
+        refs.push({ wordIndex, sylIndex: 0, isSeparator: true });
+      } else {
+        word.syllables.forEach((_, sylIndex) => {
+          refs.push({ wordIndex, sylIndex, isSeparator: false });
+        });
+      }
+    });
+    return refs;
+  }
+
+  getAllBeatCount(): number {
+    return this.getAllBeatRefs().length;
   }
 
   getLineRanges(): Array<{ start: number; end: number }> {

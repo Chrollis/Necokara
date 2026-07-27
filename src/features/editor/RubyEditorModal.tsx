@@ -84,15 +84,22 @@ export default function RubyEditorModal({
         </div>
 
         <div className="rem-footer">
-          <button type="button" className="ed-btn" onClick={() => { onResetDefault(wordIndex); onClose(); }}>
+          <button
+            type="button"
+            className="shared-btn"
+            onClick={() => {
+              onResetDefault(wordIndex);
+              onClose();
+            }}
+          >
             恢复默认
           </button>
-          <button type="button" className="ed-btn" onClick={onClose}>
+          <button type="button" className="shared-btn" onClick={onClose}>
             取消
           </button>
           <button
             type="button"
-            className="ed-btn ed-btn-primary"
+            className="shared-btn shared-btn-primary"
             onClick={handleSave}
           >
             保存

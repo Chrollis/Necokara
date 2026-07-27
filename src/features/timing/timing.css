@@ -17,6 +17,13 @@
   background: var(--canvas);
 }
 
+.tv-lyrics-finetune {
+  overflow: visible;
+  padding: 0;
+  justify-content: center;
+  border-bottom: 1px solid var(--hairline);
+}
+
 .tv-columns-row {
   display: flex;
   flex-wrap: nowrap;
@@ -162,6 +169,22 @@
   min-width: 0;
 }
 
+/* ── Beat time line ── */
+
+.tv-beattime-line {
+  position: relative;
+  height: 24px;
+  flex-shrink: 0;
+  overflow: visible;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--canvas);
+}
+
+.tv-bpm-card-dragging {
+  opacity: 0.6;
+  border-color: #7b2ff7 !important;
+}
+
 /* ── Bottom bar extras ── */
 
 .tv-time {
@@ -173,7 +196,27 @@
   margin-left: auto;
 }
 
-.tv-beat-info {
+/* ── Fine tune BPM view ── */
+
+.tv-finetune {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tv-bpm-card {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 var(--space-sm);
   font-family: var(--font-mono);
-  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  border: none;
+  border-left: 1px solid var(--hairline);
+  border-right: 1px solid var(--hairline);
+  border-radius: 0;
+  white-space: nowrap;
 }

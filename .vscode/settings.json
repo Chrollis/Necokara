@@ -17,5 +17,4 @@
     "*.{css,sass,scss}.d.ts": true
   },
 
-  "prettier.singleQuote": true
 }

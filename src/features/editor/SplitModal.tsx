@@ -26,8 +26,14 @@ export default function SplitModal({
   const handleSave = () => {
     const l = left.replace(/\s/g, '');
     const r = right.replace(/\s/g, '');
-    if (l.length === 0 || r.length === 0) { snack?.show('拆分结果不能为空'); return; }
-    if (l + r !== word.reading) { snack?.show('左右拼接后必须与原词一致'); return; }
+    if (l.length === 0 || r.length === 0) {
+      snack?.show('拆分结果不能为空');
+      return;
+    }
+    if (l + r !== word.reading) {
+      snack?.show('左右拼接后必须与原词一致');
+      return;
+    }
     onSave(wordIndex, l, r);
     onClose();
   };
@@ -52,7 +58,7 @@ export default function SplitModal({
             />
           </div>
           <div className="rem-row">
-<span className="rem-label">右</span>
+            <span className="rem-label">右</span>
             <input
               className="rem-input"
               value={right}
@@ -62,12 +68,12 @@ export default function SplitModal({
         </div>
 
         <div className="rem-footer">
-          <button type="button" className="ed-btn" onClick={onClose}>
+          <button type="button" className="shared-btn" onClick={onClose}>
             取消
           </button>
           <button
             type="button"
-            className="ed-btn ed-btn-primary"
+            className="shared-btn shared-btn-primary"
             onClick={handleSave}
           >
             拆分

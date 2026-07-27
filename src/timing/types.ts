@@ -11,6 +11,11 @@ export interface FineTuneState {
   scrollOffset: number;
 }
 
+export interface AudioMeta {
+  duration: number;
+  fileSize: number;
+}
+
 export interface TimingState {
   mode: TimingMode;
   selectedBeatIndex: number;
@@ -19,6 +24,7 @@ export interface TimingState {
   fineTune: FineTuneState;
   pendingBeatIndices: number[];
   audioFilePath: string;
+  audioMeta: AudioMeta | null;
 }
 
 export interface SyllableDisplayInfo {

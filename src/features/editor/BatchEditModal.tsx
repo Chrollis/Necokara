@@ -17,7 +17,9 @@ export default function BatchEditModal({
   );
 
   const updateText = (idx: number, value: string) => {
-    setEdits((prev) => prev.map((e) => (e.index === idx ? { ...e, text: value } : e)));
+    setEdits((prev) =>
+      prev.map((e) => (e.index === idx ? { ...e, text: value } : e)),
+    );
   };
 
   const handleSave = () => {
@@ -49,8 +51,14 @@ export default function BatchEditModal({
         </div>
 
         <div className="rem-footer">
-          <button type="button" className="ed-btn" onClick={onClose}>取消</button>
-          <button type="button" className="ed-btn ed-btn-primary" onClick={handleSave}>
+          <button type="button" className="shared-btn" onClick={onClose}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="shared-btn shared-btn-primary"
+            onClick={handleSave}
+          >
             <span className="mdi mdi-check" /> 保存
           </button>
         </div>

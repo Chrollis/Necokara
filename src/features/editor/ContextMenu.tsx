@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { useClickOutside } from '../../shared/hooks/useClickOutside';
 import type { Lyrics } from '../../editor/lyrics';
 import { isSeparatorWord, isSpaceWord, isNewlineWord } from '../../editor/word';
 
@@ -40,16 +41,7 @@ export default function ContextMenu({
   onConvertToNewline,
 }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  useClickOutside(ref, true, onClose);
 
   const word = lyrics.words[wordIndex];
   const isSep = isSeparatorWord(word);
@@ -98,14 +90,14 @@ export default function ContextMenu({
   ];
 
   return (
-    <div className="ed-context-menu" ref={ref} style={{ left: x, top: y }}>
+    <div className="shared-ctx-menu" ref={ref} style={{ left: x, top: y }}>
       {topActions.map((item, i) => {
-        if (!item.label) return <div key={i} className="ed-context-separator" />;
+        if (!item.label) return <div key={i} className="shared-ctx-sep" />;
         return (
           <button
             key={item.label}
             type="button"
-            className={['ed-context-item', item.disabled ? 'ed-context-item-disabled' : ''].filter(Boolean).join(' ')}
+            className="shared-ctx-item"
             disabled={item.disabled}
             onClick={() => { item.action(); onClose(); }}
           >
@@ -113,12 +105,12 @@ export default function ContextMenu({
           </button>
         );
       })}
-      {convertActions.length > 0 && <div className="ed-context-separator" />}
+      {convertActions.length > 0 && <div className="shared-ctx-sep" />}
       {convertActions.map((item) => (
         <button
           key={item.label}
           type="button"
-          className="ed-context-item"
+          className="shared-ctx-item"
           onClick={() => {
             item.action();
             onClose();
@@ -127,12 +119,12 @@ export default function ContextMenu({
           {item.label}
         </button>
       ))}
-      <div className="ed-context-separator" />
+      <div className="shared-ctx-sep" />
       {insertActions.map((item) => (
         <button
           key={item.label}
           type="button"
-          className="ed-context-item"
+          className="shared-ctx-item"
           onClick={() => {
             item.action();
             onClose();

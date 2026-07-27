@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { useClickOutside } from '../../shared/hooks/useClickOutside';
 
 interface SelectionContextMenuProps {
   x: number;
@@ -26,22 +27,13 @@ export default function SelectionContextMenu({
   onMergeSelection, onSegment,
 }: SelectionContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  useClickOutside(ref, true, onClose);
 
   return (
-    <div className="ed-context-menu" ref={ref} style={{ left: x, top: y }}>
+    <div className="shared-ctx-menu" ref={ref} style={{ left: x, top: y }}>
       <button
         type="button"
-        className={['ed-context-item', !canUndo ? 'ed-context-item-disabled' : ''].filter(Boolean).join(' ')}
+        className="shared-ctx-item"
         disabled={!canUndo}
         onClick={() => { onUndo(); onClose(); }}
       >
@@ -49,16 +41,16 @@ export default function SelectionContextMenu({
       </button>
       <button
         type="button"
-        className={['ed-context-item', !canRedo ? 'ed-context-item-disabled' : ''].filter(Boolean).join(' ')}
+        className="shared-ctx-item"
         disabled={!canRedo}
         onClick={() => { onRedo(); onClose(); }}
       >
         重做
       </button>
-      <div className="ed-context-separator" />
+      <div className="shared-ctx-sep" />
       <button
         type="button"
-        className={['ed-context-item', !hasSelection ? 'ed-context-item-disabled' : ''].filter(Boolean).join(' ')}
+        className="shared-ctx-item"
         disabled={!hasSelection}
         onClick={() => { onEditSelection(); onClose(); }}
       >
@@ -66,7 +58,7 @@ export default function SelectionContextMenu({
       </button>
       <button
         type="button"
-        className={['ed-context-item', !hasSelection ? 'ed-context-item-disabled' : ''].filter(Boolean).join(' ')}
+        className="shared-ctx-item"
         disabled={!hasSelection}
         onClick={() => { onDeleteSelection(); onClose(); }}
       >
@@ -74,7 +66,7 @@ export default function SelectionContextMenu({
       </button>
       <button
         type="button"
-        className={['ed-context-item', !hasMultipleSelection ? 'ed-context-item-disabled' : ''].filter(Boolean).join(' ')}
+        className="shared-ctx-item"
         disabled={!hasMultipleSelection}
         onClick={() => { onMergeSelection(); onClose(); }}
       >
@@ -82,7 +74,7 @@ export default function SelectionContextMenu({
       </button>
       <button
         type="button"
-        className={['ed-context-item', !hasSelection ? 'ed-context-item-disabled' : ''].filter(Boolean).join(' ')}
+        className="shared-ctx-item"
         disabled={!hasSelection}
         onClick={() => { onSegment(); onClose(); }}
       >

@@ -220,9 +220,6 @@
 }
 
 .iem-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
   z-index: 150;
   min-width: 400px;
   margin-top: var(--space-xs);
@@ -347,8 +344,4 @@
   background: var(--surface-soft);
 }
 
-.ed-separator {
-  height: 1px;
-  margin: var(--space-xs) 0;
-  background: var(--hairline);
-}
+

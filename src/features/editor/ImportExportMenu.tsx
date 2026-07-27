@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
+import { useClickOutside } from '../../shared/hooks/useClickOutside';
 import type { Lyrics } from '../../editor/lyrics';
 import { fromTxt, toTxt } from '../../editor/txtlyrics';
 import { fromLrc, toLrc } from '../../editor/lrclyrics';
@@ -22,20 +23,13 @@ export default function ImportExportMenu({
   const [format, setFormat] = useState<'txt' | 'lrc' | 'nico' | 'json'>('txt');
   const [exportText, setExportText] = useState('');
   const [fileName, setFileName] = useState('');
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  useClickOutside(menuRef, open, () => setOpen(false));
 
   const handleImport = useCallback(() => {
     try {
@@ -127,12 +121,15 @@ export default function ImportExportMenu({
   };
 
   return (
-    <div className="iem-root" ref={menuRef}>
+    <div className="iem-root">
       <div className="iem-buttons">
         <button
+          ref={btnRef}
           type="button"
-          className="ed-btn"
+          className="shared-btn"
           onClick={() => {
+            const r = btnRef.current?.getBoundingClientRect();
+            if (r) setMenuRect(r);
             setTab('import');
             setOpen(!open);
             setText('');
@@ -143,8 +140,10 @@ export default function ImportExportMenu({
         </button>
         <button
           type="button"
-          className="ed-btn"
+          className="shared-btn"
           onClick={() => {
+            const r = btnRef.current?.getBoundingClientRect();
+            if (r) setMenuRect(r);
             setTab('export');
             setOpen(!open);
             setExportText(exportLyrics(lyrics, format));
@@ -154,8 +153,8 @@ export default function ImportExportMenu({
         </button>
       </div>
 
-      {open && (
-        <div className="iem-dropdown">
+      {open && menuRect && (
+        <div ref={menuRef} className="iem-dropdown" style={{ position: 'fixed', left: menuRect.left, top: menuRect.bottom + 4 }}>
           <div className="iem-tabs">
             {formats.map((f) => (
               <button
@@ -197,7 +196,7 @@ export default function ImportExportMenu({
               <div className="iem-panel-footer">
                   <button
                     type="button"
-                    className="ed-btn"
+                    className="shared-btn"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <span className="mdi mdi-file-upload" /> 上传
@@ -207,7 +206,7 @@ export default function ImportExportMenu({
                   )}
                 <button
                   type="button"
-                  className="ed-btn ed-btn-primary"
+                  className="shared-btn shared-btn-primary"
                   onClick={handleImport}
                 >
                   <span className="mdi mdi-check" /> 应用
@@ -225,12 +224,12 @@ export default function ImportExportMenu({
                 readOnly
               />
               <div className="iem-panel-footer">
-                <button type="button" className="ed-btn" onClick={handleCopy}>
+                <button type="button" className="shared-btn" onClick={handleCopy}>
                   <span className="mdi mdi-content-copy" /> 复制
                 </button>
                 <button
                   type="button"
-                  className="ed-btn ed-btn-primary"
+                  className="shared-btn shared-btn-primary"
                   onClick={handleDownload}
                 >
                   <span className="mdi mdi-download" /> 下载

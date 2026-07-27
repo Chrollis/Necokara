@@ -54,6 +54,15 @@ function isSmallYoon(ch: string): boolean {
 }
 
 /**
+ * Check if a Unicode codepoint is hiragana or katakana,
+ * excluding ヶ(U+30F6) and ヵ(U+30F5) which are treated as kanji.
+ */
+function isKanaCp(cp: number): boolean {
+  if (cp === 0x30f5 || cp === 0x30f6) return false; // ヵ, ヶ → treat as kanji
+  return (cp >= 0x3040 && cp <= 0x309f) || (cp >= 0x30a0 && cp <= 0x30ff);
+}
+
+/**
  * Split a kana string into mora (拍) units.
  *
  * Rules:
@@ -80,16 +89,82 @@ function splitIntoMora(kana: string): string[] {
 }
 
 /**
- * Find the okurigana boundary: position after the last kanji character.
- * Returns surface.length if no kanji found.
+ * Split a mixed kanji-kana word (e.g. 思い出 → 思+い+出) into RubyUnits.
+ *
+ * Walks the surface left-to-right. On finding a kana character:
+ *   - Everything before it (pure kanji) → one RubyUnit with its reading portion
+ *   - The kana character itself → one RubyUnit (with reading if surface≠hiragana)
+ *   - Find the kana in reading → split reading accordingly
+ *   - Continue on remaining surface/reading
+ *   - Pure-kanji tail → final RubyUnit
+ *
+ * ヶ/ヵ are treated as kanji (not kana infix).
  */
-function okuriBoundary(surface: string): number {
-  for (let i = surface.length - 1; i >= 0; i--) {
-    if (isKanjiCp(surface.charCodeAt(i))) {
-      return i + 1;
+function splitMixedWord(surface: string, hiraReading: string): RubyUnit[] {
+  const result: RubyUnit[] = [];
+  let remSurf = surface;
+  let remRead = hiraReading;
+
+  while (remSurf.length > 0) {
+    // Find first kana character in remaining surface
+    let kanaIdx = -1;
+    for (let i = 0; i < remSurf.length; i++) {
+      if (isKanaCp(remSurf.charCodeAt(i))) {
+        kanaIdx = i;
+        break;
+      }
     }
+
+    // No more kana → pure kanji remainder
+    if (kanaIdx === -1) {
+      result.push({ surface: remSurf, readings: splitIntoMora(remRead) });
+      break;
+    }
+
+    // Surface starts with kana → pure kana prefix, no splitting needed
+    if (kanaIdx === 0) {
+      const kanaChar = remSurf[0];
+      const kanaHira = katakanaToHiragana(kanaChar);
+      const unit: RubyUnit = { surface: kanaChar, readings: [] };
+      if (kanaChar !== kanaHira) {
+        unit.readings = splitIntoMora(kanaHira);
+      }
+      result.push(unit);
+      remSurf = remSurf.slice(1);
+      remRead = remRead.slice(1);
+      continue;
+    }
+
+    // Kanji part before the kana character
+    const kanjiSurf = remSurf.slice(0, kanaIdx);
+    const kanaChar = remSurf[kanaIdx];
+
+    // Find first occurrence of this kana in remaining reading
+    const readIdx = remRead.indexOf(kanaChar);
+    if (readIdx === -1) {
+      // Not found in reading — skip this character, merge into surrounding kanji
+      remSurf = remSurf.slice(0, kanaIdx) + remSurf.slice(kanaIdx + 1);
+      continue;
+    }
+
+    // Kanji unit with its corresponding reading portion
+    const kanjiReading = remRead.slice(0, readIdx);
+    result.push({ surface: kanjiSurf, readings: splitIntoMora(kanjiReading) });
+
+    // Kana character unit (with reading if surface ≠ hiragana)
+    const kanaHira = katakanaToHiragana(kanaChar);
+    const kanaUnit: RubyUnit = { surface: kanaChar, readings: [] };
+    if (kanaChar !== kanaHira) {
+      kanaUnit.readings = splitIntoMora(kanaHira);
+    }
+    result.push(kanaUnit);
+
+    // Advance past this segment
+    remSurf = remSurf.slice(kanaIdx + 1);
+    remRead = remRead.slice(readIdx + 1);
   }
-  return surface.length;
+
+  return result;
 }
 
 function katakanaToHiragana(s: string): string {
@@ -156,9 +231,8 @@ export async function analyze(sentence: string): Promise<WordResult[] | null> {
  * Rule: if the reading annotation equals the literal surface text, skip it.
  *
  * For each kuromoji token (word):
- *   1. If surface contains CJK kanji → kanji + okurigana split
- *      - Kanji part: surface kept as-is, reading split into mora for annotation
- *      - Okurigana: each kana char becomes its own RubyUnit (no readings)
+ *   1. If surface contains CJK kanji → splitMixedWord (handles kanji+okurigana
+ *      as well as mixed kanji-kana-kanji patterns like 思い出)
  *   2. If surface is pure kana:
  *      - Split surface and reading into mora
  *      - If same mora count: output each mora separately, only annotate when
@@ -179,35 +253,11 @@ export async function analyzeRuby(
       const rawReading = t.reading ?? surface; // kuromoji returns katakana
 
       if (hasKanji(surface)) {
-        // ── Kanji word: split kanji + okurigana ──────────────
-        const ob = okuriBoundary(surface);
-        const kanjiPart = surface.slice(0, ob);
-        const okuriPart = surface.slice(ob);
-
-        // Convert reading (katakana) → hiragana for annotation
+        // ── Kanji word: split mixed kanji-kana patterns ─────
         const hiraReading = katakanaToHiragana(rawReading);
-        const allMora = splitIntoMora(hiraReading);
-
-        // Estimate mora count for okurigana
-        let okuriMoraCount = 0;
-        for (let i = 0; i < okuriPart.length; i++) {
-          okuriMoraCount += 1;
-        }
-        // Clamp
-        const totalMora = allMora.length;
-        const nk = okuriMoraCount < totalMora ? okuriMoraCount : 0;
-        const kanjiMoraCount = totalMora - nk;
-
-        // Kanji unit with its portion of reading
-        const ku: RubyUnit = { surface: kanjiPart, readings: [] };
-        for (let i = 0; i < kanjiMoraCount && i < totalMora; i++) {
-          ku.readings.push(allMora[i]);
-        }
-        result.push(ku);
-
-        // Okurigana: each mora as its own unit (no readings needed)
-        for (let i = kanjiMoraCount; i < totalMora; i++) {
-          result.push({ surface: allMora[i], readings: [] });
+        const units = splitMixedWord(surface, hiraReading);
+        for (const u of units) {
+          result.push(u);
         }
       } else {
         // ── Pure kana word ───────────────────────────────────

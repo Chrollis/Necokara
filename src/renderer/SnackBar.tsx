@@ -19,7 +19,11 @@ export function useSnackBar(): [SnackBarHandle, React.ReactNode] {
   };
 
   const node = (
-    <div className={['snackbar', visible ? 'snackbar-visible' : ''].filter(Boolean).join(' ')}>
+    <div
+      className={['snackbar', visible ? 'snackbar-visible' : '']
+        .filter(Boolean)
+        .join(' ')}
+    >
       {msg}
     </div>
   );

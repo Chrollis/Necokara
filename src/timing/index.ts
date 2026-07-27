@@ -3,6 +3,7 @@ export type {
   TimingState,
   FineTuneState,
   BpmSegment,
+  AudioMeta,
   WordDisplayInfo,
   SyllableDisplayInfo,
 } from './types';

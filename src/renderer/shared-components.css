@@ -10,6 +10,36 @@
   border-bottom: 1px solid var(--hairline);
   background: var(--canvas);
   min-width: 0;
+  position: relative;
+}
+
+.shared-toolbar-scroll {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow-x: overlay;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.shared-toolbar-scroll > * {
+  flex-shrink: 0;
+}
+
+.shared-toolbar-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.shared-toolbar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4);
+  border-radius: 2px;
+}
+
+.shared-toolbar-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .shared-btn {
@@ -51,118 +81,13 @@
   background: var(--ink-deep);
 }
 
-/* ── Shared toolbar / buttons ── */
-
-.ed-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-shrink: 0;
-  height: 56px;
-  padding: 0 var(--space-xl);
-  border-bottom: 1px solid var(--hairline);
-  background: var(--canvas);
-}
-
-.ed-toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
+/* ── Toolbar spacer ── */
 
 .ed-toolbar-spacer {
   flex: 1;
 }
 
-.ed-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  padding: 0 var(--space-md);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  line-height: 1;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  background: var(--canvas);
-  color: var(--ink);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.ed-btn:hover {
-  background: var(--surface-soft);
-}
-
-.ed-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-  background: var(--canvas);
-}
-
-.ed-btn-primary {
-  background: var(--ink);
-  color: var(--on-dark);
-  border-color: var(--ink);
-}
-
-.ed-btn-primary:hover {
-  background: var(--ink-deep);
-}
-.ed-toolbar-sep {
-  width: 1px;
-  height: 24px;
-  background: var(--hairline);
-  flex-shrink: 0;
-}
 /* ── Shared context menu ── */
-
-.ed-context-menu {
-  position: fixed;
-  z-index: 100;
-  min-width: 180px;
-  padding: var(--space-xs) 0;
-  background: var(--canvas);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.ed-context-item {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: var(--space-sm) var(--space-lg);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  color: var(--ink);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-}
-
-.ed-context-item:hover {
-  background: var(--surface-soft);
-}
-
-.ed-context-item-disabled {
-  color: var(--ash);
-  cursor: default;
-}
-
-.ed-context-item-disabled:hover {
-  background: none;
-}
-
-.ed-context-separator {
-  height: 1px;
-  margin: var(--space-xs) 0;
-  background: var(--hairline);
-}
-
-/* ── Shared generic context menu ── */
 
 .shared-ctx-menu {
   position: fixed;
@@ -208,7 +133,8 @@
 /* ── Shared bottom bar ── */
 
 .ed-bottom,
-.tv-bottom {
+.tv-bottom,
+.pv-bottom {
   flex-shrink: 0;
   display: flex;
   align-items: center;

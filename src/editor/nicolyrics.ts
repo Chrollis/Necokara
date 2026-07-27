@@ -170,7 +170,6 @@ export function fromNicoLrc(text: string): Lyrics {
         const raw = match[2];
         if (firstTime === 0) firstTime = timeMs;
         lastTime = timeMs;
-        // C++ 兼容：空 raw 不生成 word，但更新 lastTime
         if (raw.length === 0) {
           match = lineRe.exec(line);
           continue;

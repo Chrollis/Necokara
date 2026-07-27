@@ -13,14 +13,26 @@ interface WaveformProps {
   timeRef?: React.MutableRefObject<number>;
   beatTimesMs?: readonly number[];
   selectedBeatTimeMs?: number | null;
+  bpmSegments?: readonly { bpm: number; start: number }[];
+  beatLabels?: readonly { timeMs: number; endMs: number; label: string }[];
+  dragTimeMs?: number | null;
 }
 
 export default function Waveform({
-  engine, duration, currentTime,
-  zoomLevel = 1, scrollOffset = 0,
-  verticalZoom = 1, verticalOffset = 0,
-  onSeek, timeRef,
-  beatTimesMs, selectedBeatTimeMs,
+  engine,
+  duration,
+  currentTime,
+  zoomLevel = 1,
+  scrollOffset = 0,
+  verticalZoom = 1,
+  verticalOffset = 0,
+  onSeek,
+  timeRef,
+  beatTimesMs,
+  selectedBeatTimeMs,
+  bpmSegments,
+  beatLabels,
+  dragTimeMs,
 }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cacheRef = useRef<ImageData | null>(null);
@@ -41,7 +53,10 @@ export default function Waveform({
     if (cssW === 0 || cssH === 0) return;
 
     const dpr = window.devicePixelRatio || 1;
-    if (canvas.width !== cssW * dpr) { canvas.width = cssW * dpr; canvas.height = cssH * dpr; }
+    if (canvas.width !== cssW * dpr) {
+      canvas.width = cssW * dpr;
+      canvas.height = cssH * dpr;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const w = cssW;
     const h = cssH;
@@ -66,14 +81,17 @@ export default function Waveform({
     const fromRatio = fromMs / duration;
     const toRatio = toMs / duration;
 
-    const visibleRatio = (toRatio - fromRatio) || 0.001;
+    const visibleRatio = toRatio - fromRatio || 0.001;
     const totalPeaks = Math.max(2, Math.ceil(400 / visibleRatio));
     const raw = engine.getPeaks(totalPeaks);
     if (raw.length < 2) return;
 
     const startIdx = Math.floor(fromRatio * raw.length);
     const endIdx = Math.ceil(toRatio * raw.length);
-    const slice = raw.slice(Math.max(0, startIdx), Math.min(raw.length, endIdx));
+    const slice = raw.slice(
+      Math.max(0, startIdx),
+      Math.min(raw.length, endIdx),
+    );
     if (slice.length < 2) return;
 
     const mid = h / 2 + verticalOffset;
@@ -83,14 +101,13 @@ export default function Waveform({
     const path: Array<{ x: number; y: number }> = [];
     for (let i = 0; i < slice.length; i += 1) {
       const x = (i / slice.length) * w;
-      const y = i % 2 === 0
-        ? mid - slice[i] * ampScale
-        : mid + slice[i] * ampScale;
+      const y =
+        i % 2 === 0 ? mid - slice[i] * ampScale : mid + slice[i] * ampScale;
       path.push({ x, y });
     }
     wavePathRef.current = path;
 
-    // Beat dashed lines
+    // Beat dashed lines (grey)
     if (beatTimesMs && beatTimesMs.length > 0) {
       let lastX = -Infinity;
       const sorted = [...beatTimesMs].sort((a, b) => a - b);
@@ -110,12 +127,89 @@ export default function Waveform({
       ctx.setLineDash([]);
     }
 
+    // ── BPM 16th-note grid (deep purple dashed, behind the waveform) ──
+    if (bpmSegments && Array.isArray(bpmSegments) && bpmSegments.length > 0) {
+      const sorted = [...bpmSegments].sort((a, b) => a.start - b.start);
+      let lastGridX = -Infinity;
+      const MIN_GAP = 4; // px
+
+      sorted.forEach((seg, si) => {
+        if (seg.bpm <= 0) return;
+        const intervalMs = 60000 / seg.bpm / 4; // 16th note
+        const segEnd =
+          si < sorted.length - 1 ? sorted[si + 1].start : fromMs + visibleMs;
+        const gridStart = Math.max(seg.start, fromMs);
+        const gridEnd = Math.min(segEnd, fromMs + visibleMs);
+
+        let t = gridStart;
+        // Align to 16th note grid from segment start
+        const offset = (gridStart - seg.start) % intervalMs;
+        t = gridStart - offset + (offset === 0 ? 0 : intervalMs);
+
+        while (t <= gridEnd) {
+          const x = ((t - fromMs) / visibleMs) * w;
+          if (x - lastGridX >= MIN_GAP) {
+            lastGridX = x;
+            ctx.strokeStyle = 'rgba(180, 120, 220, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 3]);
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+          }
+          t += intervalMs;
+        }
+      });
+      ctx.setLineDash([]);
+
+      // BPM segment start solid lines (purple, on top of grid)
+      sorted.forEach((seg) => {
+        if (seg.start < fromMs || seg.start > fromMs + visibleMs) return;
+        const x = ((seg.start - fromMs) / visibleMs) * w;
+        ctx.strokeStyle = '#7b2ff7';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      });
+    }
+
+    // ── Beat separator vertical lines + reading text ──
+    if (beatLabels && beatLabels.length > 0) {
+      ctx.font = '14px monospace';
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+
+      beatLabels.forEach((bl) => {
+        if (bl.timeMs > fromMs + visibleMs) return;
+        const x = ((bl.timeMs - fromMs) / visibleMs) * w;
+
+        // White vertical separator line
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+
+        // Reading text: show only if it fits entirely
+        ctx.fillStyle = '#ffffff';
+        const maxTextW = ((bl.endMs - bl.timeMs) / visibleMs) * w - 8;
+        if (maxTextW > 0 && ctx.measureText(bl.label).width <= maxTextW) {
+          ctx.fillText(bl.label, x + 4, 4);
+        }
+      });
+    }
+
     // Blue waveform (full)
     ctx.strokeStyle = '#007aff';
     ctx.lineWidth = 1;
     ctx.beginPath();
     path.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
     });
     ctx.stroke();
 
@@ -123,23 +217,45 @@ export default function Waveform({
       cacheRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
     }
     drawParamsRef.current = { w, h, z: zoomLevel, s: scrollOffset };
-  }, [engine, duration, zoomLevel, scrollOffset, beatTimesMs, verticalZoom, verticalOffset]);
+  }, [
+    engine,
+    duration,
+    zoomLevel,
+    scrollOffset,
+    beatTimesMs,
+    bpmSegments,
+    beatLabels,
+    verticalZoom,
+    verticalOffset,
+  ]);
 
   // ── Animation loop: restore cache + green overlay + markers ──
   useEffect(() => {
     let animId = 0;
     const loop = () => {
       const canvas = canvasRef.current;
-      if (!canvas) { animId = requestAnimationFrame(loop); return; }
+      if (!canvas) {
+        animId = requestAnimationFrame(loop);
+        return;
+      }
       const ctx = canvas.getContext('2d');
-      if (!ctx) { animId = requestAnimationFrame(loop); return; }
+      if (!ctx) {
+        animId = requestAnimationFrame(loop);
+        return;
+      }
       const dpr = window.devicePixelRatio || 1;
       const cssH = canvas.clientHeight;
-      if (cssH === 0) { animId = requestAnimationFrame(loop); return; }
+      if (cssH === 0) {
+        animId = requestAnimationFrame(loop);
+        return;
+      }
 
       const cache = cacheRef.current;
       const path = wavePathRef.current;
-      if (!cache || path.length === 0) { animId = requestAnimationFrame(loop); return; }
+      if (!cache || path.length === 0) {
+        animId = requestAnimationFrame(loop);
+        return;
+      }
 
       // Restore cached blue waveform
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -170,7 +286,11 @@ export default function Waveform({
 
         // Selected beat marker (yellow)
         const selTime = selectedBeatTimeRef.current;
-        if (selTime != null && selTime >= fromMs && selTime <= fromMs + visibleMs) {
+        if (
+          selTime != null &&
+          selTime >= fromMs &&
+          selTime <= fromMs + visibleMs
+        ) {
           const sx = ((selTime - fromMs) / visibleMs) * p.w;
           ctx.strokeStyle = '#ffd60a';
           ctx.lineWidth = 2;
@@ -190,14 +310,33 @@ export default function Waveform({
           ctx.lineTo(phX, cssH);
           ctx.stroke();
         }
+
+        // Drag indicator (white dashed line)
+        if (
+          dragTimeMs != null &&
+          dragTimeMs >= fromMs &&
+          dragTimeMs <= fromMs + visibleMs
+        ) {
+          const dx = ((dragTimeMs - fromMs) / visibleMs) * p.w;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(dx, 0);
+          ctx.lineTo(dx, cssH);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
       }
       animId = requestAnimationFrame(loop);
     };
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [timeRef, currentTime, duration]);
+  }, [timeRef, currentTime, duration, dragTimeMs]);
 
-  useEffect(() => { drawWaveform(); }, [drawWaveform]);
+  useEffect(() => {
+    drawWaveform();
+  }, [drawWaveform]);
 
   useEffect(() => {
     const handleResize = () => drawWaveform();
@@ -217,9 +356,13 @@ export default function Waveform({
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        cursor: 'crosshair',
+      }}
       onClick={handleClick}
     />
   );
 }
-

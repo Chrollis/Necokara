@@ -1,4 +1,9 @@
-import type { TimingMode, TimingState, FineTuneState } from './types';
+import type {
+  TimingMode,
+  TimingState,
+  FineTuneState,
+  AudioMeta,
+} from './types';
 
 export function createFineTuneState(
   bpmSegments: FineTuneState['bpmSegments'] = [],
@@ -14,6 +19,7 @@ export function createTimingState(
   fineTune: FineTuneState = createFineTuneState(),
   pendingBeatIndices: number[] = [],
   audioFilePath: string = '',
+  audioMeta: AudioMeta | null = null,
 ): TimingState {
   return {
     mode,
@@ -23,6 +29,7 @@ export function createTimingState(
     fineTune,
     pendingBeatIndices,
     audioFilePath,
+    audioMeta,
   };
 }
 
