@@ -41,5 +41,9 @@ export {
   dragBoundaryClampedTime,
 } from './fineTune';
 
-export { serializeTimingState, deserializeTimingState } from './serialization';
+export {
+  serializeTimingState,
+  deserializeTimingState,
+  isValidTimingData,
+} from './serialization';
 export type { SerializedTimingState } from './serialization';

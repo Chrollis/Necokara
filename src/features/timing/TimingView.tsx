@@ -14,7 +14,7 @@ import inferSeparatorTimes from '../../timing/separator';
 import { getBpmAtTime, snapToBpmGrid } from '../../timing';
 import { setSyllableTime, unsetSyllableTime } from '../../editor/syllable';
 import { parseTime, formatTime } from '../../editor/time';
-import { UndoManager } from '../../shared/undo-manager';
+import useAudioPlayback from './hooks/useAudioPlayback';
 import AudioEngine from './AudioEngine';
 import Waveform from './Waveform';
 import TimeRuler from './TimeRuler';
@@ -29,7 +29,11 @@ interface TimingViewProps {
   lyrics: Lyrics;
   state: TimingState;
   onStateChange?: (state: TimingState) => void;
-  undoManager: UndoManager;
+  onUndoRecord?: () => void;
+  onUndo?: () => boolean;
+  onRedo?: () => boolean;
+  canUndo?: () => boolean;
+  canRedo?: () => boolean;
   renderVersion: number;
   onRequestRender?: () => void;
   snack?: { show: (msg: string, durationMs?: number) => void };
@@ -47,7 +51,11 @@ export default function TimingView({
   lyrics,
   state,
   onStateChange,
-  undoManager,
+  onUndoRecord,
+  onUndo,
+  onRedo,
+  canUndo: canUndoProp,
+  canRedo: canRedoProp,
   renderVersion,
   onRequestRender,
   snack,
@@ -56,9 +64,16 @@ export default function TimingView({
   audioFileName,
   onAudioChange,
 }: TimingViewProps) {
-  const [currentTime, setCurrentTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const currentTimeRef = useRef(0);
+  const {
+    currentTime,
+    isPlaying,
+    currentTimeRef,
+    handleSeek,
+    togglePlay,
+    setCurrentTime,
+    setIsPlaying,
+  } = useAudioPlayback({ audioEngine, audioDuration });
+
   // zoom: 1x = full song visible, higher = zoomed in
   // max zoom so viewport shows at least 2 seconds
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -97,7 +112,6 @@ export default function TimingView({
   isMultiLineRef.current = multiLine;
   const fmtSec = (s: number) =>
     `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  const animRef = useRef<number>(0);
   const lyricsRef = useRef<HTMLDivElement>(null);
   const columnsRowRef = useRef<HTMLDivElement>(null);
 
@@ -107,29 +121,6 @@ export default function TimingView({
     },
     [onStateChange],
   );
-
-  // Playback animation loop
-  useEffect(() => {
-    if (!isPlaying) {
-      cancelAnimationFrame(animRef.current);
-      return;
-    }
-    const tick = () => {
-      if (!audioEngine) return;
-      const now = audioEngine.getCurrentTime();
-      if (now >= audioDuration - 10) {
-        audioEngine.pause();
-        setIsPlaying(false);
-        setCurrentTime(audioDuration);
-        return;
-      }
-      currentTimeRef.current = now;
-      setCurrentTime(now);
-      animRef.current = requestAnimationFrame(tick);
-    };
-    animRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [isPlaying, audioEngine, audioDuration]);
 
   // Auto-load audio from saved file path
   useEffect(() => {
@@ -311,30 +302,6 @@ export default function TimingView({
     }
   }, [onAudioChange, snack, speed, state, updateState]);
 
-  const handleSeek = useCallback(
-    (timeMs: number) => {
-      const clamped = Math.max(0, Math.min(timeMs, audioDuration));
-      currentTimeRef.current = clamped;
-      setCurrentTime(clamped);
-      audioEngine?.seek(clamped);
-    },
-    [audioDuration, audioEngine],
-  );
-
-  const togglePlay = useCallback(() => {
-    if (!audioEngine) return;
-    if (isPlaying) {
-      audioEngine.pause();
-      setIsPlaying(false);
-    } else {
-      if (currentTimeRef.current >= audioDuration - 50) {
-        handleSeek(0);
-      }
-      audioEngine.play();
-      setIsPlaying(true);
-    }
-  }, [audioEngine, audioDuration, handleSeek, isPlaying]);
-
   // Sync playback rate to audio engine
   useEffect(() => {
     audioEngine?.setPlaybackRate(speed);
@@ -358,13 +325,13 @@ export default function TimingView({
     setBeatTime(lyrics, state, Math.round(currentTime + compensationMs));
     const ns = postSetBeat(lyrics, state, idx);
     updateState(moveToNextBeat(ns, lyrics));
-    undoManager.record(lyrics);
+    onUndoRecord?.();
     onRequestRender?.();
   }, [
     lyrics,
     state,
     updateState,
-    undoManager,
+    onUndoRecord,
     currentTime,
     compensationMs,
     audioEngine,
@@ -387,9 +354,9 @@ export default function TimingView({
     let ns = moveToPrevBeat(state);
     ns = postSetBeat(lyrics, ns, idx);
     updateState(ns);
-    undoManager.record(lyrics);
+    onUndoRecord?.();
     onRequestRender?.();
-  }, [lyrics, state, updateState, undoManager, onRequestRender]);
+  }, [lyrics, state, updateState, onUndoRecord, onRequestRender]);
 
   // Scan all separator times (called on mount / view switch)
   const scanAllSeparators = useCallback((lyr: Lyrics) => {
@@ -601,10 +568,12 @@ export default function TimingView({
       }
 
       const { wordIndex, sylIndex } = dragRef.current;
-      const syl = lyrics.words[wordIndex].syllables[sylIndex];
-      setSyllableTime(syl, { msec: Math.round(newTimeMs) });
+      lyrics.words[wordIndex].syllables[sylIndex] = setSyllableTime(
+        lyrics.words[wordIndex].syllables[sylIndex],
+        { msec: Math.round(newTimeMs) },
+      );
       updateState({ ...state });
-      undoManager.record(lyrics);
+      onUndoRecord?.();
       onRequestRender?.();
       setDragIdx(null);
       setDragCurrentTimeMs(null);
@@ -628,7 +597,7 @@ export default function TimingView({
     state,
     updateState,
     onRequestRender,
-    undoManager,
+    onUndoRecord,
   ]);
 
   // Auto-scroll lyrics to keep selected beat visible
@@ -722,11 +691,11 @@ export default function TimingView({
     // Valid
     if (editingWordIndex !== null) {
       // Separator edit
-      const word = lyrics.words[editingWordIndex];
-      setSyllableTime(word.syllables[0], parsed);
+      const w = lyrics.words[editingWordIndex];
+      w.syllables[0] = setSyllableTime(w.syllables[0], parsed);
       // Update state to clear any pending beats related to this separator
       updateState({ ...state });
-      undoManager.record(lyrics);
+      onUndoRecord?.();
     } else if (editingBeatIndex >= 0) {
       if (isMultiLineRef.current) {
         // Multi-line view: edit only the specific syllable
@@ -734,7 +703,7 @@ export default function TimingView({
         setBeatTime(lyrics, stateWithBeat, parsed.msec);
         const ns = postSetBeat(lyrics, stateWithBeat, editingBeatIndex);
         if (ns !== stateWithBeat) updateState(ns);
-        undoManager.record(lyrics);
+        onUndoRecord?.();
       } else {
         // Single-line view: shift all syllables of the word by offset
         const refs = lyrics.getBeatRefs();
@@ -745,22 +714,21 @@ export default function TimingView({
         const firstSyl = word.syllables[0];
         if (firstSyl.isSet) {
           const offset = parsed.msec - firstSyl.time.msec;
-          word.syllables.forEach((syl) => {
+          for (let i = 0; i < word.syllables.length; i += 1) {
+            const syl = word.syllables[i];
             if (syl.isSet) {
-              setSyllableTime(syl, {
+              word.syllables[i] = setSyllableTime(syl, {
                 msec: Math.max(0, syl.time.msec + offset),
               });
             }
-          });
+          }
         } else {
           // First syllable was unset, set it directly
-          setSyllableTime(firstSyl, parsed);
+          word.syllables[0] = setSyllableTime(firstSyl, parsed);
         }
-
-        // Trigger separator inference from this beat
         const ns = postSetBeat(lyrics, state, editingBeatIndex);
         if (ns !== state) updateState(ns);
-        undoManager.record(lyrics);
+        onUndoRecord?.();
       }
       onRequestRender?.();
     }
@@ -772,7 +740,7 @@ export default function TimingView({
     editingTimeValue,
     lyrics,
     state,
-    undoManager,
+    onUndoRecord,
     snack,
     updateState,
     onRequestRender,
@@ -796,8 +764,10 @@ export default function TimingView({
   const handleCardCtxReset = useCallback(() => {
     if (!cardCtxMenu) return;
     if (cardCtxMenu.wordIndex !== undefined) {
-      const word = lyrics.words[cardCtxMenu.wordIndex];
-      word.syllables.forEach((syl) => unsetSyllableTime(syl));
+      const w = lyrics.words[cardCtxMenu.wordIndex];
+      for (let i = 0; i < w.syllables.length; i += 1) {
+        w.syllables[i] = unsetSyllableTime(w.syllables[i]);
+      }
     } else if (isMultiLineRef.current) {
       // Multi-line view: reset only this syllable
       clearBeatTime(lyrics, {
@@ -808,47 +778,58 @@ export default function TimingView({
       // Single-line view: reset all syllables of the word
       const refs = lyrics.getBeatRefs();
       const ref = refs[cardCtxMenu.beatIndex];
-      const word = lyrics.words[ref.wordIndex];
-      word.syllables.forEach((syl) => unsetSyllableTime(syl));
+      const w = lyrics.words[ref.wordIndex];
+      for (let i = 0; i < w.syllables.length; i += 1) {
+        w.syllables[i] = unsetSyllableTime(w.syllables[i]);
+      }
     }
-    undoManager.record(lyrics);
+    onUndoRecord?.();
     setCardCtxMenu(null);
     onRequestRender?.();
-  }, [cardCtxMenu, lyrics, state, undoManager, onRequestRender]);
+  }, [cardCtxMenu, lyrics, state, onUndoRecord, onRequestRender]);
 
   const handleCardCtxShift = useCallback(
     (delta: number) => {
       if (!cardCtxMenu) return;
       if (cardCtxMenu.wordIndex !== undefined) {
-        const word = lyrics.words[cardCtxMenu.wordIndex];
-        word.syllables.forEach((syl) => {
+        const w = lyrics.words[cardCtxMenu.wordIndex];
+        for (let i = 0; i < w.syllables.length; i += 1) {
+          const syl = w.syllables[i];
           if (syl.isSet) {
-            setSyllableTime(syl, { msec: Math.max(0, syl.time.msec + delta) });
+            w.syllables[i] = setSyllableTime(syl, {
+              msec: Math.max(0, syl.time.msec + delta),
+            });
           }
-        });
+        }
       } else if (isMultiLineRef.current) {
         // Multi-line view: shift only this syllable
         const refs = lyrics.getBeatRefs();
         const ref = refs[cardCtxMenu.beatIndex];
-        const syl = lyrics.words[ref.wordIndex].syllables[ref.sylIndex];
+        const w = lyrics.words[ref.wordIndex];
+        const syl = w.syllables[ref.sylIndex];
         const current = syl.isSet ? syl.time.msec : 0;
-        setSyllableTime(syl, { msec: Math.max(0, current + delta) });
+        w.syllables[ref.sylIndex] = setSyllableTime(syl, {
+          msec: Math.max(0, current + delta),
+        });
       } else {
         // Single-line view: shift all set syllables of the word
         const refs = lyrics.getBeatRefs();
         const ref = refs[cardCtxMenu.beatIndex];
-        const word = lyrics.words[ref.wordIndex];
-        word.syllables.forEach((syl) => {
+        const w = lyrics.words[ref.wordIndex];
+        for (let i = 0; i < w.syllables.length; i += 1) {
+          const syl = w.syllables[i];
           if (syl.isSet) {
-            setSyllableTime(syl, { msec: Math.max(0, syl.time.msec + delta) });
+            w.syllables[i] = setSyllableTime(syl, {
+              msec: Math.max(0, syl.time.msec + delta),
+            });
           }
-        });
+        }
       }
-      undoManager.record(lyrics);
+      onUndoRecord?.();
       setCardCtxMenu(null);
       onRequestRender?.();
     },
-    [cardCtxMenu, lyrics, undoManager, onRequestRender],
+    [cardCtxMenu, lyrics, onUndoRecord, onRequestRender],
   );
 
   const handleCardCtxPlayFrom = useCallback(() => {
@@ -971,7 +952,7 @@ export default function TimingView({
                 ...state,
                 fineTune: { ...state.fineTune, bpmSegments: segs },
               });
-              undoManager.record(lyrics);
+              onUndoRecord?.();
             }}
             onUpdateStartTime={(i, start) => {
               const segs = [...state.fineTune.bpmSegments]
@@ -981,7 +962,7 @@ export default function TimingView({
                 ...state,
                 fineTune: { ...state.fineTune, bpmSegments: segs },
               });
-              undoManager.record(lyrics);
+              onUndoRecord?.();
             }}
             onDeleteSegment={(i) => {
               const segs = [...state.fineTune.bpmSegments]
@@ -991,7 +972,7 @@ export default function TimingView({
                 ...state,
                 fineTune: { ...state.fineTune, bpmSegments: segs },
               });
-              undoManager.record(lyrics);
+              onUndoRecord?.();
             }}
             onAddSegment={(start, bpm) => {
               const segs = [...state.fineTune.bpmSegments, { start, bpm }].sort(
@@ -1001,7 +982,7 @@ export default function TimingView({
                 ...state,
                 fineTune: { ...state.fineTune, bpmSegments: segs },
               });
-              undoManager.record(lyrics);
+              onUndoRecord?.();
             }}
             onSeek={handleSeek}
             audioLoaded={!!audioEngine}
@@ -1176,17 +1157,17 @@ export default function TimingView({
         <TimingCanvasCtxMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
-          canUndo={undoManager.canUndo()}
-          canRedo={undoManager.canRedo()}
+          canUndo={canUndoProp?.() ?? false}
+          canRedo={canRedoProp?.() ?? false}
           audioEngine={!!audioEngine}
           isPlaying={isPlaying}
           onClose={() => setCtxMenu(null)}
           onUndo={() => {
-            undoManager.undo(lyrics);
+            onUndo?.();
             onRequestRender?.();
           }}
           onRedo={() => {
-            undoManager.redo(lyrics);
+            onRedo?.();
             onRequestRender?.();
           }}
           onTogglePlay={togglePlay}

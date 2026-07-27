@@ -44,7 +44,7 @@ export function setBeatTime(
   const word = lyrics.words[ref.wordIndex];
   if (isSeparatorWord(word)) return false;
   const syl = word.syllables[ref.sylIndex];
-  setSyllableTime(syl, { msec: timeMs });
+  word.syllables[ref.sylIndex] = setSyllableTime(syl, { msec: timeMs });
   return true;
 }
 
@@ -57,7 +57,7 @@ export function clearBeatTime(lyrics: Lyrics, state: TimingState): boolean {
   if (isSeparatorWord(word)) return false;
   const syl = word.syllables[ref.sylIndex];
   if (!syl.isSet) return false;
-  unsetSyllableTime(syl);
+  word.syllables[ref.sylIndex] = unsetSyllableTime(syl);
   return true;
 }
 

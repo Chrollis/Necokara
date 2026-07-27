@@ -7,6 +7,13 @@ interface TopBarProps {
   onExit: () => void;
 }
 
+// WebkitAppRegion is a Chromium/Electron CSS property not in React's CSSProperties
+declare module 'react' {
+  interface CSSProperties {
+    WebkitAppRegion?: 'drag' | 'no-drag';
+  }
+}
+
 export default function TopBar({
   currentView,
   onViewChange,
@@ -14,12 +21,9 @@ export default function TopBar({
   onExit,
 }: TopBarProps) {
   return (
-    <div className="topbar" style={{ WebkitAppRegion: 'drag' as any }}>
+    <div className="topbar" style={{ WebkitAppRegion: 'drag' }}>
       <span className="topbar-brand">Necokara</span>
-      <div
-        className="topbar-tabs"
-        style={{ WebkitAppRegion: 'no-drag' as any }}
-      >
+      <div className="topbar-tabs" style={{ WebkitAppRegion: 'no-drag' }}>
         {(['project', 'editor', 'timing'] as const).map((view) => {
           const disabled = !hasProject && view !== 'project';
           return (
@@ -52,7 +56,7 @@ export default function TopBar({
       </div>
       <div
         className="topbar-window-controls"
-        style={{ WebkitAppRegion: 'no-drag' as any }}
+        style={{ WebkitAppRegion: 'no-drag' }}
       >
         <button
           type="button"

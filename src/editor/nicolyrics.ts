@@ -63,213 +63,218 @@ function parseRubyDef(line: string, idx: number): RubyEntry | null {
 }
 
 export function fromNicoLrc(text: string): Lyrics {
-  const lines = text.split('\n');
-  const metadata: Record<string, string> = {};
-  const rubyMap: Map<string, RubyEntry[]> = new Map();
+  try {
+    const lines = text.split('\n');
+    const metadata: Record<string, string> = {};
+    const rubyMap: Map<string, RubyEntry[]> = new Map();
 
-  interface WordEntry {
-    time: number;
-    text: string;
-  }
-  interface PendingLine {
-    start: number;
-    endTime: number;
-    words: WordEntry[];
-  }
-  const pendingLines: PendingLine[] = [];
+    interface WordEntry {
+      time: number;
+      text: string;
+    }
+    interface PendingLine {
+      start: number;
+      endTime: number;
+      words: WordEntry[];
+    }
+    const pendingLines: PendingLine[] = [];
 
-  let currentLineWords: WordEntry[] = [];
-  let currentLineStart = 0;
-  let currentLineEndTime = 0;
-  let hasCurrentLine = false;
+    let currentLineWords: WordEntry[] = [];
+    let currentLineStart = 0;
+    let currentLineEndTime = 0;
+    let hasCurrentLine = false;
 
-  for (let lineIdx = 0; lineIdx < lines.length; lineIdx += 1) {
-    const rawLine = lines[lineIdx];
-    const line = rawLine.replace(/\r$/, '');
-    if (line.length === 0) continue;
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx += 1) {
+      const rawLine = lines[lineIdx];
+      const line = rawLine.replace(/\r$/, '');
+      if (line.length === 0) continue;
 
-    if (line[0] === '@') {
-      if (hasCurrentLine) {
-        pendingLines.push({
-          start: currentLineStart,
-          endTime: currentLineEndTime,
-          words: currentLineWords,
-        });
-        currentLineWords = [];
-        hasCurrentLine = false;
-      }
-
-      if (line.startsWith('@Title=')) {
-        metadata.title = line.substring(7).trim();
-      } else if (line.startsWith('@Artist=')) {
-        metadata.artist = line.substring(8).trim();
-      } else if (line.startsWith('@Album=')) {
-        metadata.album = line.substring(7).trim();
-      } else if (line.startsWith('@TaggingBy=')) {
-        metadata.timer = line.substring(11).trim();
-      } else if (line.startsWith('@SilenceMsec=')) {
-        const val = line.substring(13).trim();
-        const num = parseInt(val, 10);
-        if (!Number.isNaN(num)) {
-          metadata.offset = String(num);
+      if (line[0] === '@') {
+        if (hasCurrentLine) {
+          pendingLines.push({
+            start: currentLineStart,
+            endTime: currentLineEndTime,
+            words: currentLineWords,
+          });
+          currentLineWords = [];
+          hasCurrentLine = false;
         }
-      } else if (line.startsWith('@Ruby') && line.includes('=')) {
-        const eqPos = line.indexOf('=');
-        const numStart = 5;
-        const numEnd = eqPos;
-        let idx = 0;
-        try {
-          idx = parseInt(line.substring(numStart, numEnd), 10);
-        } catch {
-          idx = 0;
-        }
-        const entry = parseRubyDef(line, idx);
-        if (entry) {
-          const afterEq = line.substring(eqPos + 1);
-          const commaPos = afterEq.indexOf(',');
-          const kanji =
-            commaPos !== -1 ? afterEq.substring(0, commaPos).trim() : '';
-          if (kanji) {
-            if (!rubyMap.has(kanji)) {
-              rubyMap.set(kanji, []);
+
+        if (line.startsWith('@Title=')) {
+          metadata.title = line.substring(7).trim();
+        } else if (line.startsWith('@Artist=')) {
+          metadata.artist = line.substring(8).trim();
+        } else if (line.startsWith('@Album=')) {
+          metadata.album = line.substring(7).trim();
+        } else if (line.startsWith('@TaggingBy=')) {
+          metadata.timer = line.substring(11).trim();
+        } else if (line.startsWith('@SilenceMsec=')) {
+          const val = line.substring(13).trim();
+          const num = parseInt(val, 10);
+          if (!Number.isNaN(num)) {
+            metadata.offset = String(num);
+          }
+        } else if (line.startsWith('@Ruby') && line.includes('=')) {
+          const eqPos = line.indexOf('=');
+          const numStart = 5;
+          const numEnd = eqPos;
+          let idx = 0;
+          try {
+            idx = parseInt(line.substring(numStart, numEnd), 10);
+          } catch {
+            idx = 0;
+          }
+          const entry = parseRubyDef(line, idx);
+          if (entry) {
+            const afterEq = line.substring(eqPos + 1);
+            const commaPos = afterEq.indexOf(',');
+            const kanji =
+              commaPos !== -1 ? afterEq.substring(0, commaPos).trim() : '';
+            if (kanji) {
+              if (!rubyMap.has(kanji)) {
+                rubyMap.set(kanji, []);
+              }
+              rubyMap.get(kanji)!.push(entry);
             }
-            rubyMap.get(kanji)!.push(entry);
+          }
+        } else if (line.includes('=')) {
+          const eqPos = line.indexOf('=');
+          const key = line.substring(1, eqPos).trim().toLowerCase();
+          const val = line.substring(eqPos + 1).trim();
+          if (key) {
+            metadata[key] = val;
           }
         }
-      } else if (line.includes('=')) {
-        const eqPos = line.indexOf('=');
-        const key = line.substring(1, eqPos).trim().toLowerCase();
-        const val = line.substring(eqPos + 1).trim();
-        if (key) {
-          metadata[key] = val;
-        }
-      }
-      continue;
-    }
-
-    if (line[0] === '[') {
-      if (hasCurrentLine) {
-        pendingLines.push({
-          start: currentLineStart,
-          endTime: currentLineEndTime,
-          words: currentLineWords,
-        });
-        currentLineWords = [];
-        hasCurrentLine = false;
+        continue;
       }
 
-      const lineRe = /\[(\d{1,2}:\d{1,2}:\d{1,3})\]([^[\]]*)/g;
-      let match: RegExpExecArray | null;
-      let firstTime = 0;
-      let lastTime = 0;
-      const lineWords: WordEntry[] = [];
+      if (line[0] === '[') {
+        if (hasCurrentLine) {
+          pendingLines.push({
+            start: currentLineStart,
+            endTime: currentLineEndTime,
+            words: currentLineWords,
+          });
+          currentLineWords = [];
+          hasCurrentLine = false;
+        }
 
-      match = lineRe.exec(line);
-      while (match !== null) {
-        const timeMs = parseTime(match[1]).msec;
-        const raw = match[2];
-        if (firstTime === 0) firstTime = timeMs;
-        lastTime = timeMs;
-        if (raw.length === 0) {
-          match = lineRe.exec(line);
-          continue;
-        }
-        const cleaned = raw.replace(/[\s\u3000]/g, '');
-        if (cleaned.length > 0) {
-          lineWords.push({ time: timeMs, text: cleaned });
-        } else if (raw.includes('\n')) {
-          lineWords.push({ time: timeMs, text: '\n' });
-        } else {
-          lineWords.push({ time: timeMs, text: ' ' });
-        }
+        const lineRe = /\[(\d{1,2}:\d{1,2}:\d{1,3})\]([^[\]]*)/g;
+        let match: RegExpExecArray | null;
+        let firstTime = 0;
+        let lastTime = 0;
+        const lineWords: WordEntry[] = [];
+
         match = lineRe.exec(line);
-      }
+        while (match !== null) {
+          const timeMs = parseTime(match[1]).msec;
+          const raw = match[2];
+          if (firstTime === 0) firstTime = timeMs;
+          lastTime = timeMs;
+          if (raw.length === 0) {
+            match = lineRe.exec(line);
+            continue;
+          }
+          const cleaned = raw.replace(/[\s\u3000]/g, '');
+          if (cleaned.length > 0) {
+            lineWords.push({ time: timeMs, text: cleaned });
+          } else if (raw.includes('\n')) {
+            lineWords.push({ time: timeMs, text: '\n' });
+          } else {
+            lineWords.push({ time: timeMs, text: ' ' });
+          }
+          match = lineRe.exec(line);
+        }
 
-      if (lineWords.length > 0) {
-        const endTime = lastTime > 0 ? lastTime : 0;
-        lineWords.push({ time: endTime, text: '\n' });
-        currentLineWords = lineWords;
-        currentLineStart = firstTime;
-        currentLineEndTime = endTime;
-        hasCurrentLine = true;
+        if (lineWords.length > 0) {
+          const endTime = lastTime > 0 ? lastTime : 0;
+          lineWords.push({ time: endTime, text: '\n' });
+          currentLineWords = lineWords;
+          currentLineStart = firstTime;
+          currentLineEndTime = endTime;
+          hasCurrentLine = true;
+        }
       }
     }
-  }
 
-  if (hasCurrentLine) {
-    pendingLines.push({
-      start: currentLineStart,
-      endTime: currentLineEndTime,
-      words: currentLineWords,
+    if (hasCurrentLine) {
+      pendingLines.push({
+        start: currentLineStart,
+        endTime: currentLineEndTime,
+        words: currentLineWords,
+      });
+    }
+
+    pendingLines.sort((a, b) => a.start - b.start);
+
+    rubyMap.forEach((entries) => {
+      entries.sort((a, b) => a.index - b.index);
     });
-  }
 
-  pendingLines.sort((a, b) => a.start - b.start);
+    const words: Word[] = [];
 
-  rubyMap.forEach((entries) => {
-    entries.sort((a, b) => a.index - b.index);
-  });
+    pendingLines.forEach((line) => {
+      line.words.forEach((entry) => {
+        const { time: ms, text: wordText } = entry;
 
-  const words: Word[] = [];
+        if (wordText === '\n') {
+          const nlWord = createNewlineWord();
+          nlWord.syllables[0].time = createTime(ms);
+          nlWord.syllables[0].isSet = true;
+          words.push(nlWord);
+          return;
+        }
 
-  pendingLines.forEach((line) => {
-    line.words.forEach((entry) => {
-      const { time: ms, text: wordText } = entry;
+        if (wordText === ' ') {
+          const spaceWord = createSpaceWord();
+          spaceWord.syllables[0].time = createTime(ms);
+          spaceWord.syllables[0].isSet = true;
+          words.push(spaceWord);
+          return;
+        }
 
-      if (wordText === '\n') {
-        const nlWord = createNewlineWord();
-        nlWord.syllables[0].time = createTime(ms);
-        nlWord.syllables[0].isSet = true;
-        words.push(nlWord);
-        return;
-      }
+        const entries = rubyMap.get(wordText) || [];
+        const validEntries = entries.filter((e) => e.validEndMs > ms);
+        const matched = validEntries.find((e) => e.validStartMs <= ms);
 
-      if (wordText === ' ') {
-        const spaceWord = createSpaceWord();
-        spaceWord.syllables[0].time = createTime(ms);
-        spaceWord.syllables[0].isSet = true;
-        words.push(spaceWord);
-        return;
-      }
-
-      const entries = rubyMap.get(wordText) || [];
-      const validEntries = entries.filter((e) => e.validEndMs > ms);
-      const matched = validEntries.find((e) => e.validStartMs <= ms);
-
-      let word: Word;
-      if (matched) {
-        const syllables: Syllable[] = matched.syllableTexts.map(
-          (sylText, idx) => {
-            const offset = matched.offsetMs[idx] || 0;
-            return {
-              reading: sylText,
-              time: createTime(ms + offset),
-              isSet: true,
-            };
-          },
-        );
-        word = {
-          reading: wordText,
-          syllables,
-          withRuby: true,
-          isReadingAutoGenerated: false,
-        };
-      } else {
-        word = createWord(wordText, createTime(ms));
-        word.syllables[0].isSet = true;
-        word.withRuby = false;
-        word.isReadingAutoGenerated = true;
-      }
-      words.push(word);
+        let word: Word;
+        if (matched) {
+          const syllables: Syllable[] = matched.syllableTexts.map(
+            (sylText, idx) => {
+              const offset = matched.offsetMs[idx] || 0;
+              return {
+                reading: sylText,
+                time: createTime(ms + offset),
+                isSet: true,
+              };
+            },
+          );
+          word = {
+            reading: wordText,
+            syllables,
+            withRuby: true,
+            isReadingAutoGenerated: false,
+          };
+        } else {
+          word = createWord(wordText, createTime(ms));
+          word.syllables[0].isSet = true;
+          word.withRuby = false;
+          word.isReadingAutoGenerated = true;
+        }
+        words.push(word);
+      });
     });
-  });
 
-  if (words.length === 0 || words[words.length - 1].reading !== '\n') {
-    const nl = createNewlineWord();
-    words.push(nl);
+    if (words.length === 0 || words[words.length - 1].reading !== '\n') {
+      const nl = createNewlineWord();
+      words.push(nl);
+    }
+
+    return new Lyrics(words, metadata);
+  } catch {
+    console.error('[fromNicoLrc] Failed to parse NicoLRC content');
+    return new Lyrics();
   }
-
-  return new Lyrics(words, metadata);
 }
 
 export function toNicoLrc(lyrics: Lyrics): string {

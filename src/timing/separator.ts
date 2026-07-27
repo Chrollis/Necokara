@@ -48,9 +48,10 @@ function inferLeftSeparator(
   if (leftSyl.isSet && rightSyl.isSet) {
     if (!initMode) {
       const avgTime = Math.floor((leftSyl.time.msec + rightSyl.time.msec) / 2);
-      setSyllableTime(lyrics.words[wordIndex - 1].syllables[0], {
-        msec: avgTime,
-      });
+      lyrics.words[wordIndex - 1].syllables[0] = setSyllableTime(
+        lyrics.words[wordIndex - 1].syllables[0],
+        { msec: avgTime },
+      );
     }
   } else if (rightSyl.isSet && !leftSyl.isSet) {
     const beatRefs = lyrics.getBeatRefs();
@@ -82,7 +83,7 @@ function inferRightSeparator(
 
   if (isNewlineWord(separatorWord) && rightWordIndex >= lyrics.words.length) {
     if (leftSyl.isSet && !initMode) {
-      setSyllableTime(separatorWord.syllables[0], {
+      separatorWord.syllables[0] = setSyllableTime(separatorWord.syllables[0], {
         msec: leftSyl.time.msec + 500,
       });
     }
@@ -98,7 +99,9 @@ function inferRightSeparator(
   if (leftSyl.isSet && rightSyl.isSet) {
     if (!initMode) {
       const avgTime = Math.floor((leftSyl.time.msec + rightSyl.time.msec) / 2);
-      setSyllableTime(separatorWord.syllables[0], { msec: avgTime });
+      separatorWord.syllables[0] = setSyllableTime(separatorWord.syllables[0], {
+        msec: avgTime,
+      });
     }
   } else if (leftSyl.isSet && !rightSyl.isSet) {
     const beatRefs = lyrics.getBeatRefs();

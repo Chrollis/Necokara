@@ -74,6 +74,15 @@ export default function App() {
     [],
   );
 
+  // Destroy old AudioEngine when a new one is set (prevents AudioContext / ObjectURL leak)
+  useEffect(() => {
+    return () => {
+      if (audioEngine) {
+        audioEngine.destroy();
+      }
+    };
+  }, [audioEngine]);
+
   // ── Dialog state ──
   const [pwDialog, setPwDialog] = useState<{
     mode: 'set' | 'change' | 'enter' | 'askSet' | 'askChange' | 'clear';
@@ -386,44 +395,43 @@ export default function App() {
     }
   }, [isProjectOpen, handleSave, doWindowClose]);
 
-  // Adapt the new project-based UndoManager to the old lyrics-based interface
-  // so children (LyricsEditor, TimingView) can keep calling undoManager.record(lyrics).
-  const legacyUndo = useMemo(
-    () => ({
-      record: () => {
-        projectRef.current!.hasUnsavedChanges = true;
-        undoManager.record(projectRef.current!);
-      },
-      undo: () => {
-        const ok = undoManager.undo(projectRef.current!);
-        if (ok) {
-          projectRef.current!.hasUnsavedChanges = true;
-          setRenderVersion((v) => v + 1);
-        }
-        return ok;
-      },
-      redo: () => {
-        const ok = undoManager.redo(projectRef.current!);
-        if (ok) {
-          projectRef.current!.hasUnsavedChanges = true;
-          setRenderVersion((v) => v + 1);
-        }
-        return ok;
-      },
-      canUndo: () => undoManager.canUndo(),
-      canRedo: () => undoManager.canRedo(),
-    }),
-    [undoManager],
-  );
+  const handleUndoRecord = useCallback(() => {
+    const p = projectRef.current;
+    if (!p) return;
+    p.hasUnsavedChanges = true;
+    undoManager.record(p);
+  }, [undoManager]);
+
+  const handleUndo = useCallback(() => {
+    const p = projectRef.current;
+    if (!p) return false;
+    const ok = undoManager.undo(p);
+    if (ok) {
+      p.hasUnsavedChanges = true;
+      setRenderVersion((v) => v + 1);
+    }
+    return ok;
+  }, [undoManager]);
+
+  const handleRedo = useCallback(() => {
+    const p = projectRef.current;
+    if (!p) return false;
+    const ok = undoManager.redo(p);
+    if (ok) {
+      p.hasUnsavedChanges = true;
+      setRenderVersion((v) => v + 1);
+    }
+    return ok;
+  }, [undoManager]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        legacyUndo.undo();
+        handleUndo();
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
         e.preventDefault();
-        legacyUndo.redo();
+        handleRedo();
       } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         handleSave();
@@ -452,7 +460,7 @@ export default function App() {
       document.removeEventListener('keydown', handler);
       unsubRequestClose?.();
     };
-  }, [legacyUndo, handleSave, handleOpen, handleNew, handleExit]);
+  }, [handleUndo, handleRedo, handleSave, handleOpen, handleNew, handleExit]);
 
   return (
     <div className="app-root">
@@ -521,7 +529,11 @@ export default function App() {
       ) : currentView === 'editor' ? (
         <LyricsEditor
           lyrics={lyrics}
-          undoManager={legacyUndo}
+          onUndoRecord={handleUndoRecord}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={undoManager.canUndo.bind(undoManager)}
+          canRedo={undoManager.canRedo.bind(undoManager)}
           snack={snack}
           onLyricsChange={handleLyricsChange}
         />
@@ -533,7 +545,11 @@ export default function App() {
             if (projectRef.current) projectRef.current.timing = next;
             setRenderVersion((v) => v + 1);
           }}
-          undoManager={legacyUndo}
+          onUndoRecord={handleUndoRecord}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={undoManager.canUndo.bind(undoManager)}
+          canRedo={undoManager.canRedo.bind(undoManager)}
           renderVersion={renderVersion}
           onRequestRender={handleLyricsChange}
           snack={snack}

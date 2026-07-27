@@ -176,97 +176,106 @@ export default function TimingFineTuneView({
             zIndex: 1000,
           }}
         >
-          {ctxMenu.segIndex !== undefined ? (
-            <>
-              <button
-                className="shared-ctx-item"
-                onClick={() =>
-                  openModal(
-                    { type: 'bpm', segIndex: ctxMenu.segIndex },
-                    String(sorted[ctxMenu.segIndex].bpm),
-                  )
-                }
-              >
-                修改BPM值
-              </button>
-              <button
-                className="shared-ctx-item"
-                onClick={() =>
-                  openModal(
-                    { type: 'time', segIndex: ctxMenu.segIndex },
-                    formatTime(
-                      { msec: Math.round(sorted[ctxMenu.segIndex].start) },
-                      '.',
-                      false,
-                      false,
-                    ),
-                  )
-                }
-              >
-                调整起始时间
-              </button>
-              <div className="shared-ctx-sep" />
-              <button
-                className="shared-ctx-item"
-                onClick={() => {
-                  onDeleteSegment(ctxMenu.segIndex!);
-                  setCtxMenu(null);
-                }}
-              >
-                删除此分段
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                className="shared-ctx-item"
-                disabled={!audioLoaded}
-                onClick={() =>
-                  openModal(
-                    { type: 'newSeg', clickTimeMs: ctxMenu.clickTimeMs },
-                    '120',
-                  )
-                }
-              >
-                新建BPM分段
-              </button>
-              <div className="shared-ctx-sep" />
-              <button
-                className="shared-ctx-item"
-                disabled={!audioLoaded || sorted.length === 0}
-                onClick={() => {
-                  let prev = -1;
-                  sorted.forEach((seg, i) => {
-                    if (seg.start < ctxMenu.clickTimeMs!) prev = i;
-                  });
-                  if (prev >= 0) onSeek(sorted[prev].start);
-                  setCtxMenu(null);
-                }}
-              >
-                跳到上一个分段
-              </button>
-              <button
-                className="shared-ctx-item"
-                disabled={!audioLoaded || sorted.length === 0}
-                onClick={() => {
-                  const next = sorted.findIndex(
-                    (seg) => seg.start > ctxMenu.clickTimeMs!,
-                  );
-                  if (next >= 0) onSeek(sorted[next].start);
-                  setCtxMenu(null);
-                }}
-              >
-                跳到下一个分段
-              </button>
-              <div className="shared-ctx-sep" />
-              <button className="shared-ctx-item" disabled>
-                此处BPM值：
-                {ctxMenu.clickTimeMs !== undefined
-                  ? `${getBpmAt(ctxMenu.clickTimeMs) ?? '—'}`
-                  : '—'}
-              </button>
-            </>
-          )}
+          {(() => {
+            const segIdx = ctxMenu.segIndex;
+            if (segIdx === undefined) {
+              // No segment selected — show "new segment" actions
+              return (
+                <>
+                  <button
+                    className="shared-ctx-item"
+                    disabled={!audioLoaded}
+                    onClick={() =>
+                      openModal(
+                        { type: 'newSeg', clickTimeMs: ctxMenu.clickTimeMs },
+                        '120',
+                      )
+                    }
+                  >
+                    新建BPM分段
+                  </button>
+                  <div className="shared-ctx-sep" />
+                  <button
+                    className="shared-ctx-item"
+                    disabled={!audioLoaded || sorted.length === 0}
+                    onClick={() => {
+                      let prev = -1;
+                      sorted.forEach((seg, i) => {
+                        if (seg.start < ctxMenu.clickTimeMs!) prev = i;
+                      });
+                      if (prev >= 0) onSeek(sorted[prev].start);
+                      setCtxMenu(null);
+                    }}
+                  >
+                    跳到上一个分段
+                  </button>
+                  <button
+                    className="shared-ctx-item"
+                    disabled={!audioLoaded || sorted.length === 0}
+                    onClick={() => {
+                      const next = sorted.findIndex(
+                        (seg) => seg.start > ctxMenu.clickTimeMs!,
+                      );
+                      if (next >= 0) onSeek(sorted[next].start);
+                      setCtxMenu(null);
+                    }}
+                  >
+                    跳到下一个分段
+                  </button>
+                  <div className="shared-ctx-sep" />
+                  <button className="shared-ctx-item" disabled>
+                    此处BPM值：
+                    {ctxMenu.clickTimeMs !== undefined
+                      ? `${getBpmAt(ctxMenu.clickTimeMs) ?? '—'}`
+                      : '—'}
+                  </button>
+                </>
+              );
+            }
+            // Segment selected — show segment actions
+            const seg = sorted[segIdx];
+            return (
+              <>
+                <button
+                  className="shared-ctx-item"
+                  onClick={() =>
+                    openModal(
+                      { type: 'bpm', segIndex: segIdx },
+                      String(seg.bpm),
+                    )
+                  }
+                >
+                  修改BPM值
+                </button>
+                <button
+                  className="shared-ctx-item"
+                  onClick={() =>
+                    openModal(
+                      { type: 'time', segIndex: segIdx },
+                      formatTime(
+                        { msec: Math.round(seg.start) },
+                        '.',
+                        false,
+                        false,
+                      ),
+                    )
+                  }
+                >
+                  调整起始时间
+                </button>
+                <div className="shared-ctx-sep" />
+                <button
+                  className="shared-ctx-item"
+                  onClick={() => {
+                    onDeleteSegment(segIdx);
+                    setCtxMenu(null);
+                  }}
+                >
+                  删除此分段
+                </button>
+              </>
+            );
+          })()}
         </div>
       )}
 

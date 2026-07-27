@@ -17,21 +17,22 @@ export function createUnsetSyllable(reading: string): Syllable {
   return { reading, time: createTime(0), isSet: false };
 }
 
-export function setSyllableTime(syl: Syllable, time: { msec: number }): void {
-  syl.time = time;
-  syl.isSet = true;
+export function setSyllableTime(
+  syl: Syllable,
+  time: { msec: number },
+): Syllable {
+  return { ...syl, time, isSet: true };
 }
 
-export function unsetSyllableTime(syl: Syllable): void {
-  syl.time = createTime(0);
-  syl.isSet = false;
+export function unsetSyllableTime(syl: Syllable): Syllable {
+  return { ...syl, time: createTime(0), isSet: false };
 }
 
 export function shiftSyllableTime(
   syl: Syllable,
   offset: { msec: number },
-): void {
-  syl.time = { msec: syl.time.msec + offset.msec };
+): Syllable {
+  return { ...syl, time: { msec: syl.time.msec + offset.msec } };
 }
 
 export function isSpaceSyllable(syl: Syllable): boolean {

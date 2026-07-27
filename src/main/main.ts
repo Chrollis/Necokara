@@ -243,7 +243,7 @@ function registerProjectHandlers() {
         const reader = new ZipReader(new BlobReader(blob), { password: key });
         const entries = await reader.getEntries();
         const readEntry = async (name: string): Promise<string> => {
-          const entry = entries.find((e) => e.filename === name);
+          const entry = entries.find((e: any) => e.filename === name);
           if (!entry) throw new Error(`Missing ${name}`);
           return await entry.getData(new TextWriter());
         };
