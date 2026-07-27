@@ -1,0 +1,42 @@
+/* ── Shared context menu ── */
+
+.shared-ctx-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 160px;
+  padding: var(--space-xs) 0;
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.shared-ctx-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-sm) var(--space-lg);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  color: var(--ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.shared-ctx-item:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+.shared-ctx-item:disabled {
+  color: var(--ash);
+  cursor: default;
+}
+
+.shared-ctx-sep {
+  height: 1px;
+  margin: var(--space-xs) 8px;
+  background: var(--hairline);
+}

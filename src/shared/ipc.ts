@@ -50,7 +50,7 @@ export async function ipcInvoke<TChannel extends keyof IpcChannelMap>(
   channel: TChannel,
   ...args: IpcChannelMap[TChannel]['args']
 ): Promise<IpcChannelMap[TChannel]['result']> {
-  return (window as any).electron?.ipcRenderer.invoke(channel, ...args);
+  return window.electron?.ipcRenderer.invoke(channel, ...args);
 }
 
 const IPC = {

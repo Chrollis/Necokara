@@ -74,10 +74,7 @@ export class Project {
   }
 
   private static electronApi() {
-    return (
-      (typeof window !== 'undefined' && (window as any).electron?.project) ||
-      null
-    );
+    return (typeof window !== 'undefined' && window.electron?.project) || null;
   }
 
   /** Save to disk. Returns the file path or null if cancelled. */
