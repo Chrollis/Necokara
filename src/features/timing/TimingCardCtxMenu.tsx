@@ -1,5 +1,8 @@
-import { useRef } from 'react';
-import { useClickOutside } from '../../shared/hooks/useClickOutside';
+import {
+  ContextMenuContainer,
+  ContextMenuItem,
+  ContextMenuSep,
+} from '../../shared/components/ContextMenu';
 
 interface TimingCardCtxMenuProps {
   x: number;
@@ -14,21 +17,35 @@ interface TimingCardCtxMenuProps {
 }
 
 export default function TimingCardCtxMenu({
-  x, y, isSet, audioEngine,
-  onClose, onReset, onShift, onPlayFrom, onSeek,
+  x,
+  y,
+  isSet,
+  audioEngine,
+  onClose,
+  onReset,
+  onShift,
+  onPlayFrom,
+  onSeek,
 }: TimingCardCtxMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, true, onClose);
-
   return (
-    <div ref={ref} className="shared-ctx-menu" style={{ position: 'fixed', left: x, top: y, zIndex: 1000 }}>
-      <button className="shared-ctx-item" onClick={onReset} disabled={!isSet}>重置时间</button>
-      <div className="shared-ctx-sep" />
-      <button className="shared-ctx-item" onClick={() => onShift(-10)} disabled={!isSet}>前移10ms</button>
-      <button className="shared-ctx-item" onClick={() => onShift(10)} disabled={!isSet}>后移10ms</button>
-      <div className="shared-ctx-sep" />
-      <button className="shared-ctx-item" onClick={onPlayFrom} disabled={!audioEngine || !isSet}>从该单词开始播放</button>
-      <button className="shared-ctx-item" onClick={onSeek} disabled={!audioEngine || !isSet}>转到该单词的位置</button>
-    </div>
+    <ContextMenuContainer x={x} y={y} onClose={onClose}>
+      <ContextMenuItem onClick={onReset} disabled={!isSet}>
+        重置时间
+      </ContextMenuItem>
+      <ContextMenuSep />
+      <ContextMenuItem onClick={() => onShift(-10)} disabled={!isSet}>
+        前移10ms
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => onShift(10)} disabled={!isSet}>
+        后移10ms
+      </ContextMenuItem>
+      <ContextMenuSep />
+      <ContextMenuItem onClick={onPlayFrom} disabled={!audioEngine || !isSet}>
+        从该单词开始播放
+      </ContextMenuItem>
+      <ContextMenuItem onClick={onSeek} disabled={!audioEngine || !isSet}>
+        转到该单词的位置
+      </ContextMenuItem>
+    </ContextMenuContainer>
   );
 }

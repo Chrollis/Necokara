@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react';
 import type { Lyrics } from '../../editor/lyrics';
 import ImportExportMenu from './ImportExportMenu';
-import { Toolbar, ToolbarSep } from '../../shared/components/Toolbar';
+import {
+  Toolbar,
+  ToolbarSep,
+  ToolbarButton,
+} from '../../shared/components/Toolbar';
 
 interface EditorToolbarProps {
   lyrics: Lyrics;
@@ -38,33 +42,30 @@ export default function EditorToolbar({
       <Toolbar>
         <ImportExportMenu lyrics={lyrics} onImport={onImport} />
         <ToolbarSep />
-        <button
-          type="button"
-          className="shared-btn"
-          disabled={selectedCount === 0}
+        <ToolbarButton
+          icon="pencil"
           onClick={onEdit}
+          disabled={selectedCount === 0}
           title={selectedCount === 0 ? '选取为空' : undefined}
         >
-          <span className="mdi mdi-pencil" /> 编辑
-        </button>
-        <button
-          type="button"
-          className="shared-btn"
-          disabled={selectedCount < 2}
+          编辑
+        </ToolbarButton>
+        <ToolbarButton
+          icon="call-merge"
           onClick={onMerge}
+          disabled={selectedCount < 2}
           title={selectedCount < 2 ? '需选中至少 2 个词' : undefined}
         >
-          <span className="mdi mdi-call-merge" /> 合并
-        </button>
-        <button
-          type="button"
-          className="shared-btn"
-          disabled={selectedCount === 0}
+          合并
+        </ToolbarButton>
+        <ToolbarButton
+          icon="delete"
           onClick={onDelete}
+          disabled={selectedCount === 0}
           title={selectedCount === 0 ? '选取为空' : undefined}
         >
-          <span className="mdi mdi-delete" /> 删除
-        </button>
+          删除
+        </ToolbarButton>
         <ToolbarSep />
         <button
           ref={segBtnRef}
@@ -80,9 +81,9 @@ export default function EditorToolbar({
           <span className="mdi mdi-file-tree" /> 分词
         </button>
         <ToolbarSep />
-        <button type="button" className="shared-btn" onClick={onMetadata}>
-          <span className="mdi mdi-tag-text" /> 元数据
-        </button>
+        <ToolbarButton icon="tag-text" onClick={onMetadata}>
+          元数据
+        </ToolbarButton>
         <div className="ed-toolbar-spacer" />
       </Toolbar>
       {segmentMenuOpen && selectedCount > 0 && segBtnRect && (

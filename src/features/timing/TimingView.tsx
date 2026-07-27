@@ -15,6 +15,7 @@ import { getBpmAtTime, snapToBpmGrid } from '../../timing';
 import { setSyllableTime, unsetSyllableTime } from '../../editor/syllable';
 import { parseTime, formatTime } from '../../editor/time';
 import useAudioPlayback from './hooks/useAudioPlayback';
+import useTimingKeyboard from './hooks/useTimingKeyboard';
 import AudioEngine from './AudioEngine';
 import Waveform from './Waveform';
 import TimeRuler from './TimeRuler';
@@ -375,58 +376,16 @@ export default function TimingView({
     // mount-only
   }, []);
 
-  // Keyboard: shortcuts
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return;
-      if (e.key === ' ') {
-        e.preventDefault();
-        handleSetBeat();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        handleSetBeat();
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        togglePlay();
-      } else if (e.key === 'Backspace' || e.key === 'Delete') {
-        e.preventDefault();
-        handleClearBeat();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        updateState(moveToNextBeat(state, lyrics));
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        updateState(moveToPrevBeat(state));
-      } else if (e.key === '-' || e.key === '_') {
-        e.preventDefault();
-        setVerticalZoom((z) => Math.max(0.1, z - 0.2));
-      } else if (e.key === '=' || e.key === '+') {
-        e.preventDefault();
-        setVerticalZoom((z) => Math.min(5, z + 0.2));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setVerticalOffset((o) => o + 10);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setVerticalOffset((o) => o - 10);
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [
+  useTimingKeyboard({
     handleSetBeat,
     handleClearBeat,
     togglePlay,
+    updateState,
     state,
     lyrics,
-    updateState,
     setVerticalZoom,
     setVerticalOffset,
-  ]);
+  });
 
   // ── Beat navigation ──
 

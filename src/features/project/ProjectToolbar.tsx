@@ -1,4 +1,8 @@
-import { Toolbar, ToolbarSep } from '../../shared/components/Toolbar';
+import {
+  Toolbar,
+  ToolbarSep,
+  ToolbarButton,
+} from '../../shared/components/Toolbar';
 
 interface ProjectToolbarProps {
   hasProject: boolean;
@@ -25,56 +29,42 @@ export default function ProjectToolbar({
 }: ProjectToolbarProps) {
   return (
     <Toolbar>
-      <button type="button" className="shared-btn" onClick={onNew}>
-        <span className="mdi mdi-file-plus" /> 新建
-      </button>
-      <button type="button" className="shared-btn" onClick={onOpen}>
-        <span className="mdi mdi-folder-open" /> 打开
-      </button>
+      <ToolbarButton icon="file-plus" onClick={onNew}>
+        新建
+      </ToolbarButton>
+      <ToolbarButton icon="folder-open" onClick={onOpen}>
+        打开
+      </ToolbarButton>
       <ToolbarSep />
-      <button
-        type="button"
-        className="shared-btn"
+      <ToolbarButton
+        icon="content-save"
         onClick={onSave}
         disabled={!hasProject}
       >
-        <span className="mdi mdi-content-save" /> 保存
-      </button>
-      <button
-        type="button"
-        className="shared-btn"
+        保存
+      </ToolbarButton>
+      <ToolbarButton
+        icon="content-save-outline"
         onClick={onSaveAs}
         disabled={!hasProject}
       >
-        <span className="mdi mdi-content-save-outline" /> 另存为
-      </button>
+        另存为
+      </ToolbarButton>
       <ToolbarSep />
-      <button
-        type="button"
-        className="shared-btn"
-        onClick={onClose}
-        disabled={!hasProject}
-      >
-        <span className="mdi mdi-close-box" /> 关闭
-      </button>
+      <ToolbarButton icon="close-box" onClick={onClose} disabled={!hasProject}>
+        关闭
+      </ToolbarButton>
       <ToolbarSep />
-      <button
-        type="button"
-        className="shared-btn"
-        onClick={onSetPassword}
-        disabled={!hasProject}
-      >
-        <span className="mdi mdi-lock" />{' '}
+      <ToolbarButton icon="lock" onClick={onSetPassword} disabled={!hasProject}>
         {hasUserPassword ? '更改密码' : '设置密码'}
-      </button>
-      <button
-        type="button"
-        className="shared-btn"
+      </ToolbarButton>
+      <ToolbarButton
+        icon="lock-off"
         onClick={onClearPassword}
         disabled={!hasProject}
       >
-        <span className="mdi mdi-lock-off" /> 清除密码
-      </button>
+        清除密码
+      </ToolbarButton>
     </Toolbar>
   );
 }

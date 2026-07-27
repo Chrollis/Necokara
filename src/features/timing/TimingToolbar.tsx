@@ -1,6 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
 import type AudioEngine from './AudioEngine';
-import { Toolbar, ToolbarSep } from '../../shared/components/Toolbar';
+import {
+  Toolbar,
+  ToolbarSep,
+  ToolbarButton,
+} from '../../shared/components/Toolbar';
 
 interface TimingToolbarProps {
   audioEngine: AudioEngine | null;
@@ -74,14 +78,11 @@ export default function TimingToolbar({
           <span className="mdi mdi-music" /> {audioFileName || '导入音频'}
         </button>
         <ToolbarSep />
-        <button
-          type="button"
-          className="shared-btn"
-          disabled={!audioEngine}
+        <ToolbarButton
+          icon="skip-previous"
           onClick={() => onSeek(0)}
-        >
-          <span className="mdi mdi-skip-previous" />
-        </button>
+          disabled={!audioEngine}
+        />
         <button
           type="button"
           className="shared-btn"
@@ -90,37 +91,28 @@ export default function TimingToolbar({
         >
           <span className={`mdi ${isPlaying ? 'mdi-stop' : 'mdi-play'}`} />
         </button>
-        <button
-          type="button"
-          className="shared-btn"
-          disabled={!audioEngine}
+        <ToolbarButton
+          icon="skip-next"
           onClick={() => onSeek(audioDuration)}
-        >
-          <span className="mdi mdi-skip-next" />
-        </button>
-        <ToolbarSep />
-        <button
-          type="button"
-          className="shared-btn"
           disabled={!audioEngine}
+        />
+        <ToolbarSep />
+        <ToolbarButton
+          icon="chevron-double-left"
           onClick={() => {
             const step = audioDuration / zoomLevel / 800;
             onSeek(currentTimeRef.current - step);
           }}
-        >
-          <span className="mdi mdi-chevron-double-left" />
-        </button>
-        <button
-          type="button"
-          className="shared-btn"
           disabled={!audioEngine}
+        />
+        <ToolbarButton
+          icon="chevron-double-right"
           onClick={() => {
             const step = audioDuration / zoomLevel / 800;
             onSeek(currentTimeRef.current + step);
           }}
-        >
-          <span className="mdi mdi-chevron-double-right" />
-        </button>
+          disabled={!audioEngine}
+        />
         <ToolbarSep />
         <button
           ref={compBtnRef}
@@ -148,35 +140,27 @@ export default function TimingToolbar({
           <span className="mdi mdi-alpha-b-box" /> {speed.toFixed(1)}x
         </button>
         <ToolbarSep />
-        <button
-          type="button"
-          className="shared-btn"
+        <ToolbarButton
+          icon={timelineView ? 'chart-timeline-variant' : 'card-text'}
           onClick={onToggleTimelineView}
         >
-          <span
-            className={`mdi ${timelineView ? 'mdi-chart-timeline-variant' : 'mdi-card-text'}`}
-          />{' '}
           {timelineView ? '时间轴视图' : '卡片视图'}
-        </button>
+        </ToolbarButton>
         {timelineView && (
-          <button type="button" className="shared-btn" onClick={onToggleSnap}>
-            <span
-              className={`mdi ${snapToGrid ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline'}`}
-            />{' '}
+          <ToolbarButton
+            icon={snapToGrid ? 'checkbox-marked' : 'checkbox-blank-outline'}
+            onClick={onToggleSnap!}
+          >
             自动吸附
-          </button>
+          </ToolbarButton>
         )}
         {!timelineView && (
-          <button
-            type="button"
-            className="shared-btn"
+          <ToolbarButton
+            icon={multiLine ? 'format-columns' : 'view-list'}
             onClick={onToggleMultiLine}
           >
-            <span
-              className={`mdi ${multiLine ? 'mdi-format-columns' : 'mdi-view-list'}`}
-            />{' '}
             {multiLine ? '多行视图' : '单行视图'}
-          </button>
+          </ToolbarButton>
         )}
         <span
           style={{

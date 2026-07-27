@@ -1,5 +1,8 @@
-import { useRef } from 'react';
-import { useClickOutside } from '../../shared/hooks/useClickOutside';
+import {
+  ContextMenuContainer,
+  ContextMenuItem,
+  ContextMenuSep,
+} from '../../shared/components/ContextMenu';
 
 interface SelectionContextMenuProps {
   x: number;
@@ -18,68 +21,78 @@ interface SelectionContextMenuProps {
 }
 
 export default function SelectionContextMenu({
-  x, y,
-  canUndo, canRedo,
-  hasSelection, hasMultipleSelection,
+  x,
+  y,
+  canUndo,
+  canRedo,
+  hasSelection,
+  hasMultipleSelection,
   onClose,
-  onUndo, onRedo,
-  onEditSelection, onDeleteSelection,
-  onMergeSelection, onSegment,
+  onUndo,
+  onRedo,
+  onEditSelection,
+  onDeleteSelection,
+  onMergeSelection,
+  onSegment,
 }: SelectionContextMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, true, onClose);
-
   return (
-    <div className="shared-ctx-menu" ref={ref} style={{ left: x, top: y }}>
-      <button
-        type="button"
-        className="shared-ctx-item"
+    <ContextMenuContainer x={x} y={y} onClose={onClose}>
+      <ContextMenuItem
+        onClick={() => {
+          onUndo();
+          onClose();
+        }}
         disabled={!canUndo}
-        onClick={() => { onUndo(); onClose(); }}
       >
         撤销
-      </button>
-      <button
-        type="button"
-        className="shared-ctx-item"
+      </ContextMenuItem>
+      <ContextMenuItem
+        onClick={() => {
+          onRedo();
+          onClose();
+        }}
         disabled={!canRedo}
-        onClick={() => { onRedo(); onClose(); }}
       >
         重做
-      </button>
-      <div className="shared-ctx-sep" />
-      <button
-        type="button"
-        className="shared-ctx-item"
+      </ContextMenuItem>
+      <ContextMenuSep />
+      <ContextMenuItem
+        onClick={() => {
+          onEditSelection();
+          onClose();
+        }}
         disabled={!hasSelection}
-        onClick={() => { onEditSelection(); onClose(); }}
       >
         编辑选区
-      </button>
-      <button
-        type="button"
-        className="shared-ctx-item"
+      </ContextMenuItem>
+      <ContextMenuItem
+        onClick={() => {
+          onDeleteSelection();
+          onClose();
+        }}
         disabled={!hasSelection}
-        onClick={() => { onDeleteSelection(); onClose(); }}
       >
         删除选区
-      </button>
-      <button
-        type="button"
-        className="shared-ctx-item"
+      </ContextMenuItem>
+      <ContextMenuItem
+        onClick={() => {
+          onMergeSelection();
+          onClose();
+        }}
         disabled={!hasMultipleSelection}
-        onClick={() => { onMergeSelection(); onClose(); }}
       >
         合并选区
-      </button>
-      <button
-        type="button"
-        className="shared-ctx-item"
+      </ContextMenuItem>
+      <ContextMenuSep />
+      <ContextMenuItem
+        onClick={() => {
+          onSegment();
+          onClose();
+        }}
         disabled={!hasSelection}
-        onClick={() => { onSegment(); onClose(); }}
       >
         分词
-      </button>
-    </div>
+      </ContextMenuItem>
+    </ContextMenuContainer>
   );
 }
