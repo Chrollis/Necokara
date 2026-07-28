@@ -12,7 +12,11 @@ import {
 } from '../../timing/operations';
 import inferSeparatorTimes from '../../timing/separator';
 import { getBpmAtTime, snapToBpmGrid } from '../../timing';
-import { detectRhythm, segmentBpmChanges } from '../../timing/audio-analysis';
+import {
+  detectRhythm,
+  segmentBpmChanges,
+  detectOnsets,
+} from '../../timing/audio-analysis';
 import { setSyllableTime, unsetSyllableTime } from '../../editor/syllable';
 import { parseTime, formatTime } from '../../editor/time';
 import useAudioPlayback from './hooks/useAudioPlayback';
@@ -337,6 +341,53 @@ export default function TimingView({
       setDetectingBpm(false);
     }
   }, [audioEngine, snack, updateState, state, onUndoRecord]);
+
+  const [autoTimingBusy, setAutoTimingBusy] = useState(false);
+
+  const handleAutoTiming = useCallback(async () => {
+    const rawData = audioEngine?.rawData;
+    if (!rawData) {
+      snack?.show('请先导入音频');
+      return;
+    }
+    setAutoTimingBusy(true);
+    snack?.show('自动打轴中…', 0);
+    await new Promise((r) => setTimeout(r, 16));
+    try {
+      const onsets = await detectOnsets(rawData, audioEngine!.sampleRate);
+      if (!onsets || onsets.length === 0) {
+        snack?.show('未检测到节拍');
+        return;
+      }
+
+      const beatRefs = lyrics.getBeatRefs();
+      const sylEntries: Array<{ wordIdx: number; sylIdx: number }> = [];
+      for (const ref of beatRefs) {
+        sylEntries.push({ wordIdx: ref.wordIndex, sylIdx: ref.sylIndex });
+      }
+
+      const count = Math.min(sylEntries.length, onsets.length);
+      for (let i = 0; i < count; i++) {
+        const { wordIdx, sylIdx } = sylEntries[i];
+        const timeMs = Math.round(onsets[i]);
+        lyrics.setSyllableTime(wordIdx, sylIdx, { msec: timeMs });
+      }
+
+      const refs = lyrics.getBeatRefs();
+      for (let bi = 0; bi < refs.length; bi++) {
+        inferSeparatorTimes(lyrics, bi);
+      }
+
+      onRequestRender?.();
+      onUndoRecord?.();
+      snack?.show(`自动打轴完成，已设置 ${count} 个音节`);
+    } catch (err) {
+      snack?.show('自动打轴失败：未能检测到有效节拍');
+      console.error('[auto timing]', err);
+    } finally {
+      setAutoTimingBusy(false);
+    }
+  }, [audioEngine, lyrics, snack, onRequestRender, onUndoRecord]);
 
   // Sync playback rate to audio engine
   useEffect(() => {
@@ -1001,6 +1052,8 @@ export default function TimingView({
         onImportAudio={handleImportAudio}
         onDetectBpm={handleDetectBpm}
         detectingBpm={detectingBpm}
+        onAutoTiming={handleAutoTiming}
+        autoTimingDisabled={!audioEngine?.rawData || autoTimingBusy}
       />
 
       {/* Lyrics row */}

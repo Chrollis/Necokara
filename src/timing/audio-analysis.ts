@@ -20,7 +20,18 @@ export async function detectRhythm(
   const result = fn(audioData, sampleRate);
   if (!result) throw new Error('BPM detection returned null');
   return result as RhythmResult;
-  return result as RhythmResult;
+}
+
+/** Detect onsets (note start times in ms) from raw PCM audio data. */
+export async function detectOnsets(
+  audioData: Float32Array,
+  sampleRate: number,
+): Promise<number[]> {
+  const fn = window.electron?.audioAnalysis?.detectOnsets;
+  if (!fn) throw new Error('Onset detection not available');
+  const result = fn(audioData, sampleRate) as number[] | null;
+  if (!result) throw new Error('Onset detection returned null');
+  return result;
 }
 
 export function segmentBpmChanges(

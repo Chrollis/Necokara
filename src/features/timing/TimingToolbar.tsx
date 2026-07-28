@@ -29,6 +29,8 @@ interface TimingToolbarProps {
   onToggleSnap?: () => void;
   onImportAudio: () => void;
   onDetectBpm?: () => void;
+  onAutoTiming?: () => void;
+  autoTimingDisabled?: boolean;
 }
 
 export default function TimingToolbar({
@@ -54,6 +56,8 @@ export default function TimingToolbar({
   onToggleSnap,
   onImportAudio,
   onDetectBpm,
+  onAutoTiming,
+  autoTimingDisabled,
 }: TimingToolbarProps) {
   const compInputRef = useRef<HTMLInputElement>(null);
   const speedInputRef = useRef<HTMLInputElement>(null);
@@ -177,6 +181,18 @@ export default function TimingToolbar({
           >
             {multiLine ? '多行视图' : '单行视图'}
           </ToolbarButton>
+        )}
+        {!timelineView && onAutoTiming && (
+          <>
+            <ToolbarSep />
+            <ToolbarButton
+              icon="auto-fix"
+              onClick={onAutoTiming}
+              disabled={autoTimingDisabled}
+            >
+              自动打轴
+            </ToolbarButton>
+          </>
         )}
         <span
           style={{

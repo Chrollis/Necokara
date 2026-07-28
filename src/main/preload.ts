@@ -123,9 +123,108 @@ function clampBpm(bpm: number): number {
   return Math.max(20, Math.min(300, Math.round(bpm * 10) / 10));
 }
 
+/** Detect onsets from raw PCM audio data, filtered by vocal pitch activity. */
+function detectOnsetsFromAudio(
+  samples: Float32Array,
+  sampleRate: number,
+): number[] | null {
+  try {
+    const instance = getEssentia();
+    const vector = instance.arrayToVector(samples);
+    const hopSize = 128;
+
+    // Get raw onsets first (unfiltered)
+    let rawOnsets: number[] = [];
+    try {
+      const onsetResult = instance.OnsetRate(vector);
+      for (let i = 0; i < onsetResult.onsets.size(); i++) {
+        rawOnsets.push(onsetResult.onsets.get(i) * 1000);
+      }
+    } catch (e) {
+      console.error('[preload] OnsetRate failed:', e);
+      return null;
+    }
+    if (rawOnsets.length === 0) return null;
+
+    // Try pitch-based filtering; if it fails, return raw onsets
+    try {
+      const melody = instance.PredominantPitchMelodia(
+        vector,
+        10,
+        3,
+        2048,
+        false,
+        0.8,
+        hopSize,
+        1,
+        40,
+        2093,
+        100,
+        80,
+        4,
+        0.9,
+        0.2,
+        27.5625,
+        25,
+        sampleRate,
+        0.1,
+        false,
+        0.2,
+      );
+
+      const pitchData = melody.pitch;
+      const pitchLen = pitchData.size();
+
+      // Filter: keep onsets near pitch-active frames
+      const filtered: number[] = [];
+      for (const onsetMs of rawOnsets) {
+        const frameIdx = Math.round(((onsetMs / 1000) * sampleRate) / hopSize);
+        let hasVoice = false;
+        for (let di = -2; di <= 2; di++) {
+          const idx = frameIdx + di;
+          if (idx >= 0 && idx < pitchLen && pitchData.get(idx) > 0) {
+            hasVoice = true;
+            break;
+          }
+        }
+        if (hasVoice) filtered.push(onsetMs);
+      }
+
+      // If pitch filtering removed everything, widen the search window
+      if (filtered.length === 0) {
+        for (const onsetMs of rawOnsets) {
+          const frameIdx = Math.round(
+            ((onsetMs / 1000) * sampleRate) / hopSize,
+          );
+          let hasVoice = false;
+          for (let di = -8; di <= 8; di++) {
+            const idx = frameIdx + di;
+            if (idx >= 0 && idx < pitchLen && pitchData.get(idx) > 0) {
+              hasVoice = true;
+              break;
+            }
+          }
+          if (hasVoice) filtered.push(onsetMs);
+        }
+      }
+
+      return filtered.length > 0 ? filtered : rawOnsets;
+    } catch (e) {
+      console.error(
+        '[preload] PitchMelodia failed, falling back to raw onsets:',
+        e,
+      );
+      return rawOnsets;
+    }
+  } catch {
+    return null;
+  }
+}
+
 const electronHandler = {
   audioAnalysis: {
     detectBpm: detectBpmFromAudio,
+    detectOnsets: detectOnsetsFromAudio,
   },
   ipcRenderer: {
     send(channel: string, ...args: unknown[]) {

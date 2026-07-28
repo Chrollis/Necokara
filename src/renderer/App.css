@@ -51,6 +51,10 @@ html, body, #root {
   height: 100%;
 }
 
+html {
+  background: var(--canvas);
+}
+
 .app-root {
   display: flex;
   flex-direction: column;

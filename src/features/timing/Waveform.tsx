@@ -263,6 +263,11 @@ export default function Waveform({
         return;
       }
 
+      // Fill background first (handles resize without black borders)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#201d1d';
+      ctx.fillRect(0, 0, canvas.clientWidth, cssH);
+
       // Restore cached blue waveform
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.putImageData(cache, 0, 0);
