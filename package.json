@@ -1,6 +1,6 @@
 {
-  "name": "necokara",
-  "description": "NicoNico-style karaoke subtitle video maker",
+  "name": "Necokara",
+  "description": "Necokara",
   "keywords": [
     "electron",
     "karaoke",
@@ -34,7 +34,7 @@
     "package:win": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --win --publish never && npm run build:dll",
     "package:linux": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --linux --publish never && npm run build:dll",
     "package:mac": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --mac --publish never && npm run build:dll",
-    "licenses": "generate-license-file --input package.json --output licenses/licenses.txt --overwrite && npx license-checker --production --json > licenses/licenses.json",
+    "licenses": "generate-license-file --input package.json --output licenses/licenses.txt --overwrite && npx license-checker --production --json | Set-Content -Encoding UTF8 licenses/licenses.json",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "prestart": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.main.dev.ts",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
