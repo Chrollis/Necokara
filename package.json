@@ -170,7 +170,8 @@
       "type": "distribution",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "icon": "icons/png/neco-icon-1024.png"
+      "icon": "icons/png/neco-icon-1024.png",
+      "artifactName": "Necokara-${version}_macOS.${ext}"
     },
     "dmg": {
       "contents": [
@@ -196,17 +197,19 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "icons/neco-icon.ico"
+      "installerIcon": "icons/neco-icon.ico",
+      "artifactName": "Necokara-Setup-${version}_win64.${ext}"
     },
     "portable": {
-      "artifactName": "Necokara-Portable-${version}.exe"
+      "artifactName": "Necokara-Portable-${version}_win64.${ext}"
     },
     "linux": {
       "target": [
         "AppImage"
       ],
       "category": "AudioVideo",
-      "icon": "icons/png/neco-icon-512.png"
+      "icon": "icons/png/neco-icon-512.png",
+      "artifactName": "Necokara-${version}_linux64.${ext}"
     },
     "directories": {
       "app": "release/app",
