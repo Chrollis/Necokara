@@ -7,6 +7,11 @@ import path from 'node:path';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import IPC from '../shared/ipc';
+import { initLogger } from './logger';
+
+app.setName('Necokara');
+
+initLogger();
 
 let mainWindow: BrowserWindow | null = null;
 let forceClose = false;
