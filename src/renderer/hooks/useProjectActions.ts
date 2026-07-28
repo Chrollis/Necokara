@@ -24,6 +24,7 @@ export interface UseProjectActionsOptions {
   setAudioEngine: (e: AudioEngine | null) => void;
   setAudioDuration: (d: number) => void;
   setAudioFileName: (n: string) => void;
+  onProjectChange?: () => void;
 }
 
 export interface UseProjectActionsReturn {
@@ -61,6 +62,7 @@ export default function useProjectActions(
     setAudioEngine,
     setAudioDuration,
     setAudioFileName,
+    onProjectChange,
   } = opts;
 
   const projectRef = useRef<Project | null>(null);
@@ -138,6 +140,7 @@ export default function useProjectActions(
     setIsProjectOpen(true);
     undoManager.clear();
     undoManager.record(projectRef.current!);
+    onProjectChange?.();
     addRecentFile(result.filePath);
     setAudioEngine(null);
     setAudioDuration(0);
@@ -148,6 +151,7 @@ export default function useProjectActions(
     snack,
     addRecentFile,
     undoManager,
+    onProjectChange,
     pendingOpenPathRef,
     setPwDialog,
     setAudioEngine,
@@ -211,8 +215,18 @@ export default function useProjectActions(
     setIsProjectOpen(true);
     undoManager.clear();
     undoManager.record(p);
+    setAudioEngine(null);
+    setAudioDuration(0);
+    setAudioFileName('');
+    onProjectChange?.();
     setRenderVersion((v) => v + 1);
-  }, [undoManager]);
+  }, [
+    undoManager,
+    setAudioEngine,
+    setAudioDuration,
+    setAudioFileName,
+    onProjectChange,
+  ]);
 
   const handleNew = useCallback(() => {
     if (isProjectOpen && projectRef.current?.hasUnsavedChanges) {
@@ -389,6 +403,7 @@ export default function useProjectActions(
         newProject.hasUnsavedChanges = false;
         projectRef.current = newProject;
         undoManager.record(newProject);
+        onProjectChange?.();
         setIsProjectOpen(true);
         setAudioEngine(null);
         setAudioDuration(0);

@@ -42,6 +42,11 @@ export default function App() {
   const [audioEngine, setAudioEngine] = useState<AudioEngine | null>(null);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioFileName, setAudioFileName] = useState('');
+  const [projectKey, setProjectKey] = useState(0);
+
+  const handleProjectChange = useCallback(() => {
+    setProjectKey((k) => k + 1);
+  }, []);
 
   const {
     projectRef,
@@ -71,6 +76,7 @@ export default function App() {
     setAudioEngine,
     setAudioDuration,
     setAudioFileName,
+    onProjectChange: handleProjectChange,
   });
 
   const lyrics = projectRef.current?.lyrics ?? new Lyrics();
@@ -187,6 +193,7 @@ export default function App() {
             p.hasUnsavedChanges = false;
             projectRef.current = p;
             undoManager.record(p);
+            handleProjectChange();
             setIsProjectOpen(true);
             addRecentFile(result.filePath);
             setAudioEngine(null);
@@ -198,6 +205,7 @@ export default function App() {
         />
       ) : currentView === 'editor' ? (
         <LyricsEditor
+          key={projectKey}
           lyrics={lyrics}
           onUndoRecord={handleUndoRecord}
           onUndo={handleUndo}
@@ -209,6 +217,7 @@ export default function App() {
         />
       ) : (
         <TimingView
+          key={projectKey}
           lyrics={lyrics}
           state={timing}
           onStateChange={(next) => {
