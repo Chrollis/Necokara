@@ -191,7 +191,6 @@ export class Lyrics {
 
   setSyllableTime(wordIndex: number, sylIndex: number, time: Time): void {
     const word = this.words[wordIndex];
-    if (isSeparatorWord(word)) return;
     const newSyllables = [...word.syllables];
     newSyllables[sylIndex] = {
       ...newSyllables[sylIndex],
@@ -206,7 +205,6 @@ export class Lyrics {
 
   unsetSyllableTime(wordIndex: number, sylIndex: number): void {
     const word = this.words[wordIndex];
-    if (isSeparatorWord(word)) return;
     const newSyllables = [...word.syllables];
     newSyllables[sylIndex] = {
       ...newSyllables[sylIndex],
@@ -225,7 +223,6 @@ export class Lyrics {
     deltaMs: number,
   ): void {
     const word = this.words[wordIndex];
-    if (isSeparatorWord(word)) return;
     const syl = word.syllables[sylIndex];
     if (!syl.isSet) return;
     const newSyllables = [...word.syllables];
