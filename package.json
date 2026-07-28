@@ -30,7 +30,10 @@
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
     "postinstall": "electron-builder install-app-deps && npm run build:dll",
     "rebuild:all": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
+    "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --win --publish never && npm run build:dll",
+    "package:win": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --win --publish never && npm run build:dll",
+    "package:linux": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --linux --publish never && npm run build:dll",
+    "package:mac": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --mac --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "prestart": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.main.dev.ts",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
@@ -166,7 +169,8 @@
       },
       "type": "distribution",
       "hardenedRuntime": true,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "icon": "icons/png/neco-icon-1024.png"
     },
     "dmg": {
       "contents": [
@@ -184,14 +188,25 @@
     },
     "win": {
       "target": [
-        "nsis"
-      ]
+        "nsis",
+        "portable"
+      ],
+      "icon": "icons/neco-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "icons/neco-icon.ico"
+    },
+    "portable": {
+      "artifactName": "Necokara-Portable-${version}.exe"
     },
     "linux": {
       "target": [
         "AppImage"
       ],
-      "category": "AudioVideo"
+      "category": "AudioVideo",
+      "icon": "icons/png/neco-icon-512.png"
     },
     "directories": {
       "app": "release/app",
