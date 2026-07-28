@@ -36,31 +36,45 @@ export default function UpdateButton({ status, onInstall }: UpdateButtonProps) {
     );
   }
 
-  if (type === 'available') {
+  if (type === 'available' && status.isPortable) {
     return (
       <button
-        className="ubtn ubtn-downloading"
+        className="ubtn ubtn-ready"
         onClick={() => window.open(status.releaseUrl)}
-        title="打开此版本的 GitHub Releases"
+        title="前往下载新版本"
       >
-        <span className="ubtn-spinner" /> 下载更新中
+        发现新版本
       </button>
     );
   }
 
-  if (type === 'downloading') {
+  if (type === 'downloading' || type === 'available') {
+    const label =
+      type === 'downloading' ? `下载中 ${status.percent}%` : '下载更新中';
     return (
       <button
         className="ubtn ubtn-downloading"
         onClick={() => window.open(status.releaseUrl)}
         title="打开此版本的 GitHub Releases"
       >
-        <span className="ubtn-spinner" /> 下载中 {status.percent}%
+        {type === 'downloading' ? null : <span className="ubtn-spinner" />}
+        {label}
       </button>
     );
   }
 
   if (type === 'downloaded') {
+    if (status.isPortable) {
+      return (
+        <button
+          className="ubtn ubtn-ready"
+          onClick={() => window.open(status.releaseUrl)}
+          title="前往 GitHub 下载"
+        >
+          前往下载
+        </button>
+      );
+    }
     return (
       <button
         className="ubtn ubtn-ready"

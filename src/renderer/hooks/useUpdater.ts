@@ -3,9 +3,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 export type UpdateStatus =
   | { type: 'checking' }
   | { type: 'not-available' }
-  | { type: 'available'; version: string; releaseUrl: string }
+  | {
+      type: 'available';
+      version: string;
+      releaseUrl: string;
+      isPortable: boolean;
+    }
   | { type: 'downloading'; percent: number; releaseUrl: string }
-  | { type: 'downloaded'; version: string; releaseUrl: string }
+  | {
+      type: 'downloaded';
+      version: string;
+      releaseUrl: string;
+      isPortable: boolean;
+    }
   | { type: 'error' };
 
 export function useUpdater(snack?: {
@@ -26,12 +36,17 @@ export function useUpdater(snack?: {
 
     cleanups.push(
       ipc.on('update:available', (args: unknown) => {
-        const { version, releaseUrl } = args as {
+        const { version, releaseUrl, isPortable } = args as {
           version: string;
           releaseUrl: string;
+          isPortable: boolean;
         };
-        setStatus({ type: 'available', version, releaseUrl });
-        snackRef.current?.show(`发现新版本 v${version}，正在下载…`, 4000);
+        setStatus({ type: 'available', version, releaseUrl, isPortable });
+        if (isPortable) {
+          snackRef.current?.show(`发现新版本 v${version}`, 5000);
+        } else {
+          snackRef.current?.show(`发现新版本 v${version}，正在下载…`, 4000);
+        }
       }),
     );
 
@@ -67,11 +82,12 @@ export function useUpdater(snack?: {
 
     cleanups.push(
       ipc.on('update:downloaded', (args: unknown) => {
-        const { version, releaseUrl } = args as {
+        const { version, releaseUrl, isPortable } = args as {
           version: string;
           releaseUrl: string;
+          isPortable: boolean;
         };
-        setStatus({ type: 'downloaded', version, releaseUrl });
+        setStatus({ type: 'downloaded', version, releaseUrl, isPortable });
         snackRef.current?.show('更新已就绪', 5000);
       }),
     );

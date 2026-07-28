@@ -5,21 +5,27 @@
  * Communicates state changes to the renderer via IPC.
  */
 import { autoUpdater } from 'electron-updater';
-import { ipcMain, BrowserWindow } from 'electron';
+import { app, ipcMain, BrowserWindow } from 'electron';
 import log from 'electron-log';
 import IPC from '../shared/ipc';
 
 let mainWindow: BrowserWindow | null = null;
+
+function isPortable(): boolean {
+  return app.isPackaged && process.resourcesPath.includes('win-unpacked');
+}
 
 export function setMainWindow(win: BrowserWindow): void {
   mainWindow = win;
 }
 
 export function initUpdater(): void {
+  const portable = isPortable();
+
   autoUpdater.logger = log;
-  autoUpdater.autoDownload = true; // download immediately
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.allowPrerelease = true; // alpha/beta/rc all included
+  autoUpdater.autoDownload = !portable;
+  autoUpdater.autoInstallOnAppQuit = !portable;
+  autoUpdater.allowPrerelease = true;
 
   // ── Events → renderer ──
 
@@ -33,6 +39,7 @@ export function initUpdater(): void {
     mainWindow?.webContents.send(IPC.UPDATE_AVAILABLE, {
       version: info.version,
       releaseUrl,
+      isPortable: portable,
     });
   });
 
@@ -57,6 +64,7 @@ export function initUpdater(): void {
     mainWindow?.webContents.send(IPC.UPDATE_DOWNLOADED, {
       version: info.version,
       releaseUrl,
+      isPortable: isPortable(),
     });
   });
 
