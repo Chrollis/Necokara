@@ -8,7 +8,7 @@
 
 <br>
 
-![Necokara](icons/png/neco-icon-128.png)
+![Necokara](icons/png/neco-icon-256.png)
 
 </div>
 
