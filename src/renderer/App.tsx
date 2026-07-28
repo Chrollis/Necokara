@@ -161,13 +161,7 @@ export default function App() {
                 : 'set',
             })
           }
-          onClearPassword={() => {
-            if (!projectRef.current?.projectJson.userPassword) {
-              snack?.show('当前项目未设置密码');
-              return;
-            }
-            setPwDialog({ mode: 'clear' });
-          }}
+          onClearPassword={() => setPwDialog({ mode: 'clear' })}
           recentFiles={recentFiles}
           onOpenRecent={async (filePath) => {
             if (!window.electron?.project) {

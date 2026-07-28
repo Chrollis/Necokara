@@ -28,8 +28,13 @@ export default function BatchEditModal({
   };
 
   return (
-    <div className="rem-overlay" onClick={onClose}>
-      <div className="rem-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="rem-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="rem-modal">
         <div className="rem-header">
           <span className="rem-title">编辑选区 ({words.length} 个词)</span>
           <button type="button" className="rem-close" onClick={onClose}>
@@ -45,6 +50,7 @@ export default function BatchEditModal({
                 className="rem-input"
                 value={e.text}
                 onChange={(ev) => updateText(e.index, ev.target.value)}
+                onKeyDown={(ev) => ev.stopPropagation()}
               />
             </div>
           ))}

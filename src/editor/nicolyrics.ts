@@ -365,7 +365,6 @@ export function toNicoLrc(lyrics: Lyrics): string {
   const rubyWords = new Map<string, Word[]>();
   lyrics.words.forEach((word) => {
     if (word.reading === ' ' || word.reading === '\n') return;
-    if (!word.withRuby) return;
     const time = word.syllables[0]?.time;
     if (!time) return;
     if (!rubyWords.has(word.reading)) rubyWords.set(word.reading, []);
@@ -392,25 +391,36 @@ export function toNicoLrc(lyrics: Lyrics): string {
     let groupVoice = '';
     let lastInfo: SylInfo | null = null;
     let hasGroup = false;
-    let entryCount = 0;
+    const groupStartIdx = allRuby.length; // first entry of this kanji group
+
+    // Push the current group
+    const pushGroup = (endMs: number) => {
+      if (!hasGroup) return;
+      allRuby.push({
+        validStartMs: groupStart,
+        validEndMs: endMs,
+        kanji,
+        voice: groupVoice,
+        first: false,
+        last: false,
+      });
+    };
 
     words.forEach((word) => {
-      const cur = getSylInfo(word);
       const ms = word.syllables[0]?.time?.msec ?? 0;
+
+      if (!word.withRuby) {
+        pushGroup(ms);
+        hasGroup = false;
+        lastInfo = null;
+        return;
+      }
+
+      const cur = getSylInfo(word);
 
       if (hasGroup && lastInfo && sameSyls(lastInfo, cur)) return;
 
-      if (hasGroup) {
-        allRuby.push({
-          validStartMs: groupStart,
-          validEndMs: ms,
-          kanji,
-          voice: groupVoice,
-          first: false,
-          last: false,
-        });
-      }
-      entryCount += 1;
+      if (hasGroup) pushGroup(ms);
       groupStart = ms;
       groupVoice = '';
       cur.texts.forEach((text, j) => {
@@ -424,42 +434,45 @@ export function toNicoLrc(lyrics: Lyrics): string {
       hasGroup = true;
     });
 
+    // Close the last group of this kanji
     if (hasGroup) {
-      const firstIdx = allRuby.length - entryCount + 1;
-      allRuby.push({
-        validStartMs: groupStart,
-        validEndMs: Number.MAX_SAFE_INTEGER,
-        kanji,
-        voice: groupVoice,
-        first: false,
-        last: false,
-      });
-      if (entryCount === 1) {
-        allRuby[allRuby.length - 1].first = true;
-        allRuby[allRuby.length - 1].last = true;
-      } else {
-        allRuby[firstIdx].first = true;
-        allRuby[allRuby.length - 1].last = true;
-      }
+      pushGroup(Number.MAX_SAFE_INTEGER);
+      // Mark first/last entries of this kanji group
+      allRuby[groupStartIdx].first = true;
+      allRuby[allRuby.length - 1].last = true;
     }
   });
 
   allRuby.sort((a, b) => a.validStartMs - b.validStartMs);
 
+  // Fix up entries with MAX_SAFE_INTEGER end: set to next entry's start
+  for (let i = 0; i < allRuby.length; i++) {
+    if (allRuby[i].validEndMs === Number.MAX_SAFE_INTEGER) {
+      if (i + 1 < allRuby.length) {
+        allRuby[i].validEndMs = allRuby[i + 1].validStartMs;
+      }
+    }
+  }
+
+  const timeFmt = (ms: number) => formatTime(createTime(ms), ':', true, true);
+
   allRuby.forEach((r, i) => {
+    const prefix = `@Ruby${i + 1}`;
+    const timeFmt = (ms: number) => formatTime(createTime(ms), ':', true, true);
+
     if (r.first && r.last) {
-      result.push(`@Ruby${i + 1}=${r.kanji},${r.voice}\n`);
+      result.push(`${prefix}=${r.kanji},${r.voice}\n`);
     } else if (r.first) {
       result.push(
-        `@Ruby${i + 1}=${r.kanji},${r.voice},,${formatTime(createTime(r.validEndMs), ':', true, true)}\n`,
+        `${prefix}=${r.kanji},${r.voice},,${timeFmt(r.validEndMs)}\n`,
       );
     } else if (r.last) {
       result.push(
-        `@Ruby${i + 1}=${r.kanji},${r.voice},${formatTime(createTime(r.validStartMs), ':', true, true)}\n`,
+        `${prefix}=${r.kanji},${r.voice},${timeFmt(r.validStartMs)}\n`,
       );
     } else {
       result.push(
-        `@Ruby${i + 1}=${r.kanji},${r.voice},${formatTime(createTime(r.validStartMs), ':', true, true)},${formatTime(createTime(r.validEndMs), ':', true, true)}\n`,
+        `${prefix}=${r.kanji},${r.voice},${timeFmt(r.validStartMs)},${timeFmt(r.validEndMs)}\n`,
       );
     }
   });

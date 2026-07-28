@@ -39,8 +39,13 @@ export default function SplitModal({
   };
 
   return (
-    <div className="rem-overlay" onClick={onClose}>
-      <div className="rem-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="rem-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="rem-modal">
         <div className="rem-header">
           <span className="rem-title">拆分: {word.reading}</span>
           <button type="button" className="rem-close" onClick={onClose}>
@@ -55,6 +60,7 @@ export default function SplitModal({
               className="rem-input"
               value={left}
               onChange={(e) => setLeft(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
             />
           </div>
           <div className="rem-row">
@@ -63,6 +69,7 @@ export default function SplitModal({
               className="rem-input"
               value={right}
               onChange={(e) => setRight(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
             />
           </div>
         </div>

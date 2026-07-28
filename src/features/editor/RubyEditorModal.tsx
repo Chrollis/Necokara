@@ -48,8 +48,13 @@ export default function RubyEditorModal({
   };
 
   return (
-    <div className="rem-overlay" onClick={onClose}>
-      <div className="rem-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="rem-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="rem-modal">
         <div className="rem-header">
           <span className="rem-title">编辑注音: {word.reading}</span>
           <button type="button" className="rem-close" onClick={onClose}>
@@ -65,6 +70,7 @@ export default function RubyEditorModal({
                 className="rem-input"
                 value={r}
                 onChange={(e) => updateReading(i, e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
                 autoFocus={i === readings.length - 1}
               />
               <button

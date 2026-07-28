@@ -61,7 +61,7 @@ export default function ProjectToolbar({
       <ToolbarButton
         icon="lock-off"
         onClick={onClearPassword}
-        disabled={!hasProject}
+        disabled={!hasProject || !hasUserPassword}
       >
         清除密码
       </ToolbarButton>

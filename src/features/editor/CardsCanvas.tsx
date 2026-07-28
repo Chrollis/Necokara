@@ -51,7 +51,12 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
   ) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragFrom, setDragFrom] = useState(-1);
-    const [dragRect, setDragRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+    const [dragRect, setDragRect] = useState<{
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    } | null>(null);
     const dragStartPos = useRef({ x: 0, y: 0 });
     const dragOccurred = useRef(false);
     const cardEls = useRef<Map<number, HTMLElement>>(new Map());
@@ -82,7 +87,10 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
       if (target.closest('.wc-card, .wc-edit-input, .wc-wrapper')) return;
       e.preventDefault();
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      dragStartPos.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      dragStartPos.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
       setIsDragging(true);
       setDragFrom(getWordIndexAt(e.clientX, e.clientY));
     };
@@ -110,7 +118,12 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
         cardEls.current.forEach((el, idx) => {
           if (el.dataset.newline === 'true') return;
           const r = el.getBoundingClientRect();
-          if (r.left < dragRight && r.right > dragLeft && r.top < dragBottom && r.bottom > dragTop) {
+          if (
+            r.left < dragRight &&
+            r.right > dragLeft &&
+            r.top < dragBottom &&
+            r.bottom > dragTop
+          ) {
             found.push(idx);
           }
         });
@@ -158,6 +171,7 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
     };
 
     const handleInputKeyDown = (e: React.KeyboardEvent) => {
+      e.stopPropagation();
       e.nativeEvent.stopImmediatePropagation();
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -167,9 +181,6 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
         onEditingTab();
       } else if (e.key === 'Escape') {
         onEditingTextFinish();
-      } else if (e.key === ' ') {
-        // Allow space in edit mode, just prevent document shortcuts
-        e.nativeEvent.stopImmediatePropagation();
       }
     };
 
@@ -224,7 +235,11 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
       </div>
     );
 
-    function registerCard(el: HTMLElement | null, idx: number, isNewline: boolean) {
+    function registerCard(
+      el: HTMLElement | null,
+      idx: number,
+      isNewline: boolean,
+    ) {
       if (el) {
         el.dataset.newline = String(isNewline);
         cardEls.current.set(idx, el);
@@ -244,7 +259,9 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
         cards.push(
           <span
             key={i}
-            ref={(el) => registerCard(el as HTMLElement | null, i, isNewlineWord(word))}
+            ref={(el) =>
+              registerCard(el as HTMLElement | null, i, isNewlineWord(word))
+            }
             className={word.withRuby ? 'wc-wrapper' : undefined}
             onClick={(e) => handleWordClick(i, e)}
             onDoubleClick={(e) => handleWordDoubleClick(i, e)}
@@ -271,7 +288,16 @@ const CardsCanvas = forwardRef<HTMLDivElement, CardsCanvasProps>(
                 isSpace={isSpaceWord(word)}
                 isNewline={isNewlineWord(word)}
                 isSelected={isSelected}
-                style={word.withRuby ? { minWidth: word.syllables.map((s) => s.reading).join('').length * 6 + 6 } : undefined}
+                style={
+                  word.withRuby
+                    ? {
+                        minWidth:
+                          word.syllables.map((s) => s.reading).join('').length *
+                            6 +
+                          6,
+                      }
+                    : undefined
+                }
               />
             )}
           </span>,
