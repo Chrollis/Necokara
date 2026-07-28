@@ -8,7 +8,9 @@ export type UpdateStatus =
   | { type: 'downloaded'; version: string; releaseUrl: string }
   | { type: 'error' };
 
-export function useUpdater(snack?: { show: (msg: string, durationMs?: number) => void }): {
+export function useUpdater(snack?: {
+  show: (msg: string, durationMs?: number) => void;
+}): {
   status: UpdateStatus;
   installUpdate: () => void;
 } {
@@ -24,7 +26,10 @@ export function useUpdater(snack?: { show: (msg: string, durationMs?: number) =>
 
     cleanups.push(
       ipc.on('update:available', (args: unknown) => {
-        const { version, releaseUrl } = args as { version: string; releaseUrl: string };
+        const { version, releaseUrl } = args as {
+          version: string;
+          releaseUrl: string;
+        };
         setStatus({ type: 'available', version, releaseUrl });
         snackRef.current?.show(`发现新版本 v${version}，正在下载…`, 4000);
       }),
@@ -49,7 +54,11 @@ export function useUpdater(snack?: { show: (msg: string, durationMs?: number) =>
         const { percent } = args as { percent: number };
         setStatus((prev) => {
           if (prev.type === 'available' || prev.type === 'downloading') {
-            return { type: 'downloading', percent, releaseUrl: prev.releaseUrl };
+            return {
+              type: 'downloading',
+              percent,
+              releaseUrl: prev.releaseUrl,
+            };
           }
           return prev;
         });
@@ -58,7 +67,10 @@ export function useUpdater(snack?: { show: (msg: string, durationMs?: number) =>
 
     cleanups.push(
       ipc.on('update:downloaded', (args: unknown) => {
-        const { version, releaseUrl } = args as { version: string; releaseUrl: string };
+        const { version, releaseUrl } = args as {
+          version: string;
+          releaseUrl: string;
+        };
         setStatus({ type: 'downloaded', version, releaseUrl });
         snackRef.current?.show('更新已就绪', 5000);
       }),

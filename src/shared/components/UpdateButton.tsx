@@ -62,7 +62,11 @@ export default function UpdateButton({ status, onInstall }: UpdateButtonProps) {
 
   if (type === 'downloaded') {
     return (
-      <button className="ubtn ubtn-ready" onClick={onInstall} title="重启以安装更新">
+      <button
+        className="ubtn ubtn-ready"
+        onClick={onInstall}
+        title="重启以安装更新"
+      >
         更新
       </button>
     );
