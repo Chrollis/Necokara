@@ -388,6 +388,7 @@ export default function useProjectActions(
         };
         newProject.hasUnsavedChanges = false;
         projectRef.current = newProject;
+        undoManager.record(newProject);
         setIsProjectOpen(true);
         setAudioEngine(null);
         setAudioDuration(0);

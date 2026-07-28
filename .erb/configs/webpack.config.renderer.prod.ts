@@ -95,6 +95,7 @@ const configuration: webpack.Configuration = {
     fallback: {
       path: require.resolve('path-browserify'),
       fs: false,
+      crypto: false,
     },
   },
 

@@ -16,6 +16,7 @@ interface WaveformProps {
   bpmSegments?: readonly { bpm: number; start: number }[];
   beatLabels?: readonly { timeMs: number; endMs: number; label: string }[];
   dragTimeMs?: number | null;
+  bpmDragTimeMs?: number | null;
 }
 
 export default function Waveform({
@@ -33,6 +34,7 @@ export default function Waveform({
   bpmSegments,
   beatLabels,
   dragTimeMs,
+  bpmDragTimeMs,
 }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cacheRef = useRef<ImageData | null>(null);
@@ -40,6 +42,10 @@ export default function Waveform({
   const drawParamsRef = useRef({ w: 0, h: 0, z: 0, s: 0 });
   const selectedBeatTimeRef = useRef<number | null>(null);
   selectedBeatTimeRef.current = selectedBeatTimeMs ?? null;
+  const dragTimeRef = useRef<number | null>(null);
+  dragTimeRef.current = dragTimeMs ?? null;
+  const bpmDragTimeRef = useRef<number | null>(null);
+  bpmDragTimeRef.current = bpmDragTimeMs ?? null;
 
   // ── Draw static waveform (blue) ──
   const drawWaveform = useCallback(() => {
@@ -311,15 +317,26 @@ export default function Waveform({
           ctx.stroke();
         }
 
-        // Drag indicator (white dashed line)
-        if (
-          dragTimeMs != null &&
-          dragTimeMs >= fromMs &&
-          dragTimeMs <= fromMs + visibleMs
-        ) {
-          const dx = ((dragTimeMs - fromMs) / visibleMs) * p.w;
+        // Beat drag indicator (white dashed line)
+        const dt = dragTimeRef.current;
+        if (dt != null && dt >= fromMs && dt <= fromMs + visibleMs) {
+          const dx = ((dt - fromMs) / visibleMs) * p.w;
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
           ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(dx, 0);
+          ctx.lineTo(dx, cssH);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // BPM drag indicator (purple dashed line)
+        const bdt = bpmDragTimeRef.current;
+        if (bdt != null && bdt >= fromMs && bdt <= fromMs + visibleMs) {
+          const dx = ((bdt - fromMs) / visibleMs) * p.w;
+          ctx.strokeStyle = '#7b2ff7';
+          ctx.lineWidth = 2;
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
           ctx.moveTo(dx, 0);
@@ -332,7 +349,7 @@ export default function Waveform({
     };
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [timeRef, currentTime, duration, dragTimeMs]);
+  }, [timeRef, currentTime, duration]);
 
   useEffect(() => {
     drawWaveform();

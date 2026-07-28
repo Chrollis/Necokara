@@ -7,6 +7,8 @@ export default class AudioEngine {
 
   private _rawData: Float32Array | null = null;
 
+  private _sampleRate: number = 44100;
+
   private _url: string | null = null;
 
   get duration() {
@@ -15,6 +17,14 @@ export default class AudioEngine {
 
   get playing() {
     return this.audio ? !this.audio.paused : false;
+  }
+
+  get rawData(): Float32Array | null {
+    return this._rawData;
+  }
+
+  get sampleRate(): number {
+    return this._sampleRate;
   }
 
   getPeaks(width: number): Float32Array {
@@ -93,6 +103,7 @@ export default class AudioEngine {
       const buf = await file.arrayBuffer();
       const c = new AudioContext();
       const decoded = await c.decodeAudioData(buf);
+      this._sampleRate = decoded.sampleRate;
       c.close();
       this._rawData = decoded.getChannelData(0);
     } catch {

@@ -12,6 +12,7 @@ import {
 } from '../../timing/operations';
 import inferSeparatorTimes from '../../timing/separator';
 import { getBpmAtTime, snapToBpmGrid } from '../../timing';
+import { detectRhythm, segmentBpmChanges } from '../../timing/audio-analysis';
 import { setSyllableTime, unsetSyllableTime } from '../../editor/syllable';
 import { parseTime, formatTime } from '../../editor/time';
 import useAudioPlayback from './hooks/useAudioPlayback';
@@ -85,15 +86,23 @@ export default function TimingView({
   const [multiLine, setMultiLine] = useState(false);
   const [timelineView, setTimelineView] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
+  const [detectingBpm, setDetectingBpm] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragCurrentTimeMs, setDragCurrentTimeMs] = useState<number | null>(
     null,
   );
+  const [bpmDragTimeMs, setBpmDragTimeMs] = useState<number | null>(null);
+  const [bpmDragIdx, setBpmDragIdx] = useState<number | null>(null);
   const dragRef = useRef<{
     startX: number;
     startTimeMs: number;
     wordIndex: number;
     sylIndex: number;
+    offsetMs: number;
+  } | null>(null);
+  const bpmDragRef = useRef<{
+    segIndex: number;
+    startTimeMs: number;
     offsetMs: number;
   } | null>(null);
   const [speed, setSpeed] = useState(1.0);
@@ -302,6 +311,32 @@ export default function TimingView({
       console.error(err);
     }
   }, [onAudioChange, snack, speed, state, updateState]);
+
+  const handleDetectBpm = useCallback(async () => {
+    const rawData = audioEngine?.rawData;
+    if (!rawData || rawData.length === 0) {
+      snack?.show('请先导入音频');
+      return;
+    }
+    setDetectingBpm(true);
+    // Flush React state so button shows "分析中…" before blocking IPC
+    await new Promise((r) => setTimeout(r, 16));
+    try {
+      const result = await detectRhythm(rawData, audioEngine!.sampleRate);
+      updateState({
+        ...state,
+        fineTune: { ...state.fineTune, bpmSegments: result.segments },
+      });
+      setSnapToGrid(true);
+      onUndoRecord?.();
+      snack?.show(`BPM 检测完成：${result.bpm}，网格已开启`);
+    } catch (err) {
+      snack?.show('BPM 检测失败');
+      console.error(err);
+    } finally {
+      setDetectingBpm(false);
+    }
+  }, [audioEngine, snack, updateState, state, onUndoRecord]);
 
   // Sync playback rate to audio engine
   useEffect(() => {
@@ -555,6 +590,87 @@ export default function TimingView({
     state,
     updateState,
     onRequestRender,
+    onUndoRecord,
+  ]);
+
+  // ── BPM segment drag ──
+
+  const handleBpmDragStart = useCallback(
+    (e: React.MouseEvent, i: number, startMs: number) => {
+      e.preventDefault();
+      setBpmDragIdx(i);
+      setBpmDragTimeMs(startMs);
+      const el = document.querySelector('.tv-finetune');
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const visibleMs = audioDuration / zoomLevel;
+      const fromMs = scrollOffset;
+      const mouseTime =
+        fromMs + ((e.clientX - rect.left) / rect.width) * visibleMs;
+      const offsetMs = mouseTime - startMs;
+      bpmDragRef.current = { segIndex: i, startTimeMs: startMs, offsetMs };
+    },
+    [audioDuration, zoomLevel, scrollOffset],
+  );
+
+  useEffect(() => {
+    if (bpmDragIdx === null) return;
+    const el = document.querySelector('.tv-finetune');
+    if (!el) return;
+
+    const computeTime = (clientX: number) => {
+      const rect = el.getBoundingClientRect();
+      const visibleMs = audioDuration / zoomLevel;
+      const fromMs = scrollOffset;
+      const ratio = (clientX - rect.left) / rect.width;
+      return Math.max(
+        0,
+        Math.min(
+          audioDuration,
+          fromMs + ratio * visibleMs - (bpmDragRef.current?.offsetMs ?? 0),
+        ),
+      );
+    };
+
+    const handleMove = (e: MouseEvent) => {
+      setBpmDragTimeMs(computeTime(e.clientX));
+    };
+
+    const handleUp = (e: MouseEvent) => {
+      if (!bpmDragRef.current) return;
+      const timeMs = computeTime(e.clientX);
+
+      const segs = [...state.fineTune.bpmSegments]
+        .map((s, idx) =>
+          idx === bpmDragRef.current!.segIndex
+            ? { ...s, start: Math.round(timeMs) }
+            : s,
+        )
+        .sort((a, b) => a.start - b.start);
+      updateState({
+        ...state,
+        fineTune: { ...state.fineTune, bpmSegments: segs },
+      });
+      onUndoRecord?.();
+      setBpmDragIdx(null);
+      setBpmDragTimeMs(null);
+      bpmDragRef.current = null;
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      setBpmDragTimeMs(null);
+    };
+  }, [
+    bpmDragIdx,
+    audioDuration,
+    zoomLevel,
+    scrollOffset,
+    state,
+    updateState,
     onUndoRecord,
   ]);
 
@@ -883,6 +999,8 @@ export default function TimingView({
           setTimelineView((v) => !v);
         }}
         onImportAudio={handleImportAudio}
+        onDetectBpm={handleDetectBpm}
+        detectingBpm={detectingBpm}
       />
 
       {/* Lyrics row */}
@@ -901,6 +1019,9 @@ export default function TimingView({
             scrollOffset={scrollOffset}
             duration={audioDuration}
             snack={snack}
+            onBpmDragStart={handleBpmDragStart}
+            bpmDragIdx={bpmDragIdx}
+            bpmDragTimeMs={bpmDragTimeMs}
             onUpdateBpm={(i, bpm) => {
               const segs = [...state.fineTune.bpmSegments].sort(
                 (a, b) => a.start - b.start,
@@ -1106,6 +1227,7 @@ export default function TimingView({
               : undefined
           }
           dragTimeMs={timelineView ? dragCurrentTimeMs : undefined}
+          bpmDragTimeMs={timelineView ? bpmDragTimeMs : undefined}
           verticalZoom={verticalZoom}
           verticalOffset={verticalOffset}
         />

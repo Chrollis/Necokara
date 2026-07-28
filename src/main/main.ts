@@ -39,6 +39,7 @@ const createWindow = async () => {
     frame: false,
     autoHideMenuBar: true,
     webPreferences: {
+      sandbox: false,
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
         : path.join(__dirname, '../../.erb/dll/preload.js'),

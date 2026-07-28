@@ -66,12 +66,6 @@ export default function LyricsEditor({
   const canvasRef = useRef<HTMLDivElement>(null);
   const clipboardRef = useRef<Word[] | null>(null);
 
-  // Record initial state so first edit has something to undo to
-  useEffect(() => {
-    onUndoRecord?.();
-    // mount-only
-  }, []);
-
   function mergeConsecutiveSeparators() {
     const ws = lyrics.words;
     let i = 1;

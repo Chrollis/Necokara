@@ -186,6 +186,7 @@ export default function App() {
             };
             p.hasUnsavedChanges = false;
             projectRef.current = p;
+            undoManager.record(p);
             setIsProjectOpen(true);
             addRecentFile(result.filePath);
             setAudioEngine(null);

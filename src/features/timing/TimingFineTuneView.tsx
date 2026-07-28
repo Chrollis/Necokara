@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useClickOutside } from '../../shared/hooks/useClickOutside';
 import { parseTime, formatTime } from '../../editor/time';
 import type { BpmSegment } from '../../timing/types';
@@ -14,6 +14,9 @@ interface TimingFineTuneViewProps {
   onDeleteSegment: (index: number) => void;
   onAddSegment: (start: number, bpm: number) => void;
   onSeek: (timeMs: number) => void;
+  onBpmDragStart?: (e: React.MouseEvent, i: number, startMs: number) => void;
+  bpmDragIdx?: number | null;
+  bpmDragTimeMs?: number | null;
   audioLoaded?: boolean;
 }
 
@@ -28,6 +31,9 @@ export default function TimingFineTuneView({
   onDeleteSegment,
   onAddSegment,
   onSeek,
+  onBpmDragStart,
+  bpmDragIdx,
+  bpmDragTimeMs,
   audioLoaded,
 }: TimingFineTuneViewProps) {
   const sorted = useMemo(
@@ -60,6 +66,14 @@ export default function TimingFineTuneView({
   } | null>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
   useClickOutside(ctxRef, !!ctxMenu, () => setCtxMenu(null));
+
+  const handleCardMouseDown = useCallback(
+    (e: React.MouseEvent, i: number, segStart: number) => {
+      if (!audioLoaded) return;
+      onBpmDragStart?.(e, i, segStart);
+    },
+    [onBpmDragStart, audioLoaded],
+  );
 
   // ── Modal state ──
   const [modal, setModal] = useState<{
@@ -144,20 +158,26 @@ export default function TimingFineTuneView({
       onContextMenu={handleBlankContext}
     >
       {sorted.map((seg, i) => {
-        const x = ((seg.start - fromMs) / visibleMs) * 100;
+        const isDragging = bpmDragIdx === i;
+        const displayTime: number =
+          isDragging && bpmDragTimeMs != null ? bpmDragTimeMs : seg.start;
+        const x = ((displayTime - fromMs) / visibleMs) * 100;
         const isVisible =
           seg.start >= fromMs && seg.start <= fromMs + visibleMs;
 
         return (
           <div
             key={i}
-            className="tv-bpm-card"
+            className={`tv-bpm-card${isDragging ? ' tv-bpm-card-dragging' : ''}`}
             style={{
               position: 'absolute',
               left: `${x}%`,
-              display: isVisible ? 'flex' : 'none',
+              display: isVisible || isDragging ? 'flex' : 'none',
+              cursor: 'ew-resize',
+              userSelect: 'none',
             }}
             onContextMenu={(e) => handleCardContext(e, i)}
+            onMouseDown={(e) => handleCardMouseDown(e, i, seg.start)}
           >
             ♩= {seg.bpm}
           </div>

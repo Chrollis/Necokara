@@ -17,6 +17,7 @@ interface TimingToolbarProps {
   speed: number;
   multiLine: boolean;
   timelineView: boolean;
+  detectingBpm: boolean;
   snack?: { show: (msg: string, durationMs?: number) => void };
   onTogglePlay: () => void;
   onSeek: (timeMs: number) => void;
@@ -27,6 +28,7 @@ interface TimingToolbarProps {
   onToggleTimelineView: () => void;
   onToggleSnap?: () => void;
   onImportAudio: () => void;
+  onDetectBpm?: () => void;
 }
 
 export default function TimingToolbar({
@@ -40,6 +42,7 @@ export default function TimingToolbar({
   speed,
   multiLine,
   timelineView,
+  detectingBpm,
   snapToGrid,
   snack,
   onTogglePlay,
@@ -50,6 +53,7 @@ export default function TimingToolbar({
   onToggleTimelineView,
   onToggleSnap,
   onImportAudio,
+  onDetectBpm,
 }: TimingToolbarProps) {
   const compInputRef = useRef<HTMLInputElement>(null);
   const speedInputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +157,18 @@ export default function TimingToolbar({
           >
             自动吸附
           </ToolbarButton>
+        )}
+        {timelineView && (
+          <>
+            <ToolbarSep />
+            <ToolbarButton
+              icon="chart-bell-curve-cumulative"
+              onClick={onDetectBpm!}
+              disabled={!audioEngine || detectingBpm}
+            >
+              {detectingBpm ? '分析中…' : '自动BPM'}
+            </ToolbarButton>
+          </>
         )}
         {!timelineView && (
           <ToolbarButton
