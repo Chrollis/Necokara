@@ -9,6 +9,7 @@ import {
   createSpaceWord,
   createNewlineWord,
 } from '../../editor/word';
+import type { Word } from '../../editor/word';
 import { createSyllable, createUnsetSyllable } from '../../editor/syllable';
 import type { Syllable } from '../../editor/syllable';
 import { analyzeRuby } from '../../editor/japanese-tokenizer';
@@ -63,6 +64,7 @@ export default function LyricsEditor({
   const [editingTextValue, setEditingTextValue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const clipboardRef = useRef<Word[] | null>(null);
 
   // Record initial state so first edit has something to undo to
   useEffect(() => {
@@ -469,9 +471,48 @@ export default function LyricsEditor({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Ignore if focus is inside an input, textarea, or contenteditable
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         e.preventDefault();
         setSelectedIndices(lyrics.words.map((_, i) => i));
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        if (selectedIndices.length === 0) return;
+        const sorted = [...selectedIndices].sort((a, b) => a - b);
+        clipboardRef.current = sorted.map((i) => lyrics.words[i]);
+        try {
+          const text = sorted.map((i) => lyrics.words[i].reading).join('');
+          navigator.clipboard.writeText(text);
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+        const words = clipboardRef.current;
+        if (!words || words.length === 0) return;
+        const sorted = [...selectedIndices].sort((a, b) => a - b);
+        const insertAt =
+          sorted.length === 0
+            ? lyrics.words.length
+            : e.shiftKey
+              ? Math.min(...sorted)
+              : Math.max(...sorted) + 1;
+        // Paste as unset words, strip all timing data
+        const pasted = words.map((w) => {
+          if (isSeparatorWord(w)) {
+            return w.reading === '\n' ? createNewlineWord() : createSpaceWord();
+          }
+          return createUnsetWord(w.reading);
+        });
+        pasted.forEach((w, i) => lyrics.insertWord(insertAt + i, w));
+        setSelectedIndices(pasted.map((_, i) => insertAt + i));
+        forceRender();
+        onUndoRecord?.();
         return;
       }
       if (editingTextIdx !== null) return;
