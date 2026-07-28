@@ -8,10 +8,12 @@ import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import IPC from '../shared/ipc';
 import { initLogger } from './logger';
+import { initUpdater, setMainWindow } from './updater';
 
 app.setName('Necokara');
 
 initLogger();
+initUpdater();
 
 let mainWindow: BrowserWindow | null = null;
 let forceClose = false;
@@ -44,6 +46,8 @@ const createWindow = async () => {
   });
 
   mainWindow.loadURL(resolveHtmlPath('index.html'));
+
+  setMainWindow(mainWindow);
 
   mainWindow.on('ready-to-show', () => {
     if (!mainWindow) {

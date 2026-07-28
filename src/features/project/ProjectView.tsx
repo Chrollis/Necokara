@@ -2,10 +2,14 @@ import type { Project } from '../../project/project';
 import { APP_VERSION } from '../../project/project';
 import { isSeparatorWord } from '../../editor/word';
 import ProjectToolbar from './ProjectToolbar';
+import type { UpdateStatus } from '../../renderer/hooks/useUpdater';
+import UpdateButton from '../../shared/components/UpdateButton';
 
 interface ProjectViewProps {
   project: Project | null;
   hasUserPassword: boolean;
+  updateStatus: UpdateStatus;
+  onInstallUpdate: () => void;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -20,6 +24,8 @@ interface ProjectViewProps {
 export default function ProjectView({
   project,
   hasUserPassword,
+  updateStatus,
+  onInstallUpdate,
   onNew,
   onOpen,
   onSave,
@@ -125,7 +131,10 @@ export default function ProjectView({
           </div>
         )}
       </div>
-      <div className="pv-bottom">ver: {APP_VERSION}</div>
+      <div className="pv-bottom">
+        <UpdateButton status={updateStatus} onInstall={onInstallUpdate} />
+        <span style={{ marginLeft: 'auto' }}>ver: {APP_VERSION}</span>
+      </div>
     </div>
   );
 }

@@ -63,6 +63,12 @@ const IPC = {
   PROJECT_OPEN_PATH: 'project:openPath' as const,
   OPEN_AUDIO: 'audio:open' as const,
   LOG: 'log:message' as const,
+  UPDATE_AVAILABLE: 'update:available' as const,
+  UPDATE_NOT_AVAILABLE: 'update:not-available' as const,
+  UPDATE_ERROR: 'update:error' as const,
+  UPDATE_PROGRESS: 'update:progress' as const,
+  UPDATE_DOWNLOADED: 'update:downloaded' as const,
+  UPDATE_INSTALL: 'update:install' as const,
 };
 
 export default IPC;

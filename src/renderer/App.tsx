@@ -20,12 +20,14 @@ import AudioEngine from '../features/timing/AudioEngine';
 import useRecentFiles from './hooks/useRecentFiles';
 import useDialogs from './hooks/useDialogs';
 import useProjectActions from './hooks/useProjectActions';
+import { useUpdater } from './hooks/useUpdater';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<
     'project' | 'editor' | 'timing'
   >('project');
   const [snack, snackNode] = useSnackBar();
+  const { status: updateStatus, installUpdate } = useUpdater(snack);
   const { recentFiles, addRecentFile } = useRecentFiles();
 
   const {
@@ -145,6 +147,8 @@ export default function App() {
         <ProjectView
           project={projectRef.current}
           hasUserPassword={!!projectRef.current?.projectJson.userPassword}
+          updateStatus={updateStatus}
+          onInstallUpdate={installUpdate}
           onNew={handleNew}
           onOpen={handleOpen}
           onSave={handleSave}
