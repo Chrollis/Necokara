@@ -7,12 +7,14 @@ import {
 } from '../timing/serialization';
 import { createTimingState } from '../timing/state';
 
+import pkg from '../../release/app/package.json';
+
 export interface ProjectSnapshot {
   lyrics: ReturnType<typeof toJson>;
   timing: ReturnType<typeof serializeTimingState>;
 }
 
-export const APP_VERSION = '0.12.0-alpha';
+export const APP_VERSION = pkg.version;
 
 export interface ProjectJson {
   version: string;

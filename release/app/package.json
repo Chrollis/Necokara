@@ -1,10 +1,11 @@
 {
   "name": "necokara",
-  "version": "0.1.0",
+  "version": "0.12.0-alpha",
   "description": "NicoNico-style karaoke subtitle video maker",
   "license": "GPL-3.0-only",
   "author": {
-    "name": "Necokara Contributors"
+    "name": "Chrollis Phrott",
+    "url": "https://github.com/Chrollis"
   },
   "main": "./dist/main/main.js",
   "scripts": {
