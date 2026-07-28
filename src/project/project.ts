@@ -63,7 +63,9 @@ export class Project {
     restored.words.forEach((w) => this.lyrics.words.push(w));
     this.lyrics.metadata = { ...restored.metadata };
 
+    const currentIndex = this.timing.selectedBeatIndex;
     this.timing = deserializeTimingState(snap.timing);
+    this.timing.selectedBeatIndex = currentIndex;
   }
 
   /** Build the data object to pass to window.electron.project.save() */

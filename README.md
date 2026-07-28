@@ -38,11 +38,11 @@ Necokara 是一款桌面端卡拉OK字幕视频制作工具，支持歌词编辑
 
 从 [Releases](https://github.com/Chrollis/Necokara/releases) 获取最新版本：
 
-| 平台    | 格式                                             |
-| ------- | ------------------------------------------------ |
-| Windows | `Necokara Setup x.x.x.exe`（安装版）             |
-| Windows | `Necokara-Portable-x.x.x.exe`（便携版，免安装）  |
-| Linux   | `Necokara-x.x.x.AppImage`（需在 Linux 环境构建） |
+| 平台    | 格式                                                     |
+| ------- | -------------------------------------------------------- |
+| Windows | `Necokara-Setup-x.x.x_win64.exe`（安装版）               |
+| Windows | `Necokara-Portable-x.x.x_win64.exe`（便携版，免安装）    |
+| Linux   | `Necokara-x.x.x_linux64.AppImage`（需在 Linux 环境构建） |
 
 ### 🔧 从源码构建
 
@@ -96,11 +96,11 @@ Necokara is a desktop karaoke subtitle video maker with lyrics editing, beat tim
 
 Get the latest build from [Releases](https://github.com/Chrollis/Necokara/releases):
 
-| Platform | Format                                                          |
-| -------- | --------------------------------------------------------------- |
-| Windows  | `Necokara Setup x.x.x.exe` (installer)                          |
-| Windows  | `Necokara-Portable-x.x.x.exe` (portable)                        |
-| Linux    | `Necokara-x.x.x.AppImage` (requires Linux environment to build) |
+| Platform | Format                                                                  |
+| -------- | ----------------------------------------------------------------------- |
+| Windows  | `Necokara-Setup-x.x.x_win64.exe` (installer)                            |
+| Windows  | `Necokara-Portable-x.x.x_win64.exe` (portable)                          |
+| Linux    | `Necokara-x.x.x_linux64.AppImage` (requires Linux environment to build) |
 
 ### 🔧 Build from source
 
