@@ -218,6 +218,15 @@
     "path": "C:\\Users\\Chrollis\\Desktop\\Necokara\\node_modules\\ms",
     "licenseFile": "C:\\Users\\Chrollis\\Desktop\\Necokara\\node_modules\\ms\\license.md"
   },
+  "pleco-xa@2.0.5": {
+    "licenses": "MIT",
+    "repository": "https://github.com/pleco-xa/pleco-xa",
+    "publisher": "Cameron Brooks",
+    "url": "https://plecoxa.com",
+    "path": "C:\\Users\\Chrollis\\Desktop\\Necokara\\node_modules\\pleco-xa",
+    "licenseFile": "C:\\Users\\Chrollis\\Desktop\\Necokara\\node_modules\\pleco-xa\\LICENSE",
+    "noticeFile": "C:\\Users\\Chrollis\\Desktop\\Necokara\\node_modules\\pleco-xa\\NOTICE"
+  },
   "promise-retry@2.0.1": {
     "licenses": "MIT",
     "repository": "https://github.com/IndigoUnited/node-promise-retry",
@@ -242,7 +251,7 @@
   "retry@0.12.0": {
     "licenses": "MIT",
     "repository": "https://github.com/tim-kos/node-retry",
-    "publisher": "Tim Kosch眉tzki",
+    "publisher": "Tim Koschützki",
     "email": "tim@debuggable.com",
     "url": "http://debuggable.com/",
     "path": "C:\\Users\\Chrollis\\Desktop\\Necokara\\node_modules\\retry",

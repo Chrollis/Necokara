@@ -196,6 +196,111 @@ function registerProjectHandlers() {
     return { filePath, dataUrl: `data:${contentType};base64,${base64}` };
   });
 
+  // ── Vocal separation via worker thread ──
+
+  /** Write a Float32Array as a 16-bit mono WAV file. */
+  function writeWav(filePath: string, samples: Float32Array, sr: number): void {
+    const fs = require('fs');
+    const numSamples = samples.length;
+    const buf = Buffer.alloc(44 + numSamples * 2);
+    const w = (off: number, v: number, size: number) => {
+      for (let i = 0; i < size; i++) buf[off + i] = (v >> (i * 8)) & 0xff;
+    };
+    const s = (off: number, str: string) => {
+      for (let i = 0; i < str.length; i++) buf[off + i] = str.charCodeAt(i);
+    };
+    s(0, 'RIFF');
+    w(4, 36 + numSamples * 2, 4);
+    s(8, 'WAVE');
+    s(12, 'fmt ');
+    w(16, 16, 4);
+    w(20, 1, 2);
+    w(22, 1, 2);
+    w(24, sr, 4);
+    w(28, sr * 2, 4);
+    w(32, 2, 2);
+    w(34, 16, 2);
+    s(36, 'data');
+    w(40, numSamples * 2, 4);
+    for (let i = 0; i < numSamples; i++) {
+      const sample = Math.max(-1, Math.min(1, samples[i]));
+      w(44 + i * 2, sample * 0x7fff, 2);
+    }
+    fs.writeFileSync(filePath, buf);
+  }
+
+  ipcMain.handle(
+    IPC.SEPARATE_AUDIO,
+    async (
+      _event,
+      audioData: Float32Array,
+      sampleRate: number,
+      audioFilePath?: string,
+    ) => {
+      // @ts-expect-error dynamic import resolved by webpack
+      const { separate } = await import('./separate');
+      try {
+        const result = await separate(audioData, sampleRate, (p: number) => {
+          _event.sender.send(IPC.SEPARATE_PROGRESS, p);
+        });
+        if (!result) return { error: 'Separation returned null' };
+
+        // Save vocals/accompaniment alongside the audio file
+        if (audioFilePath) {
+          try {
+            const fs = require('fs');
+            const dir = path.dirname(audioFilePath);
+            const base = path.basename(
+              audioFilePath,
+              path.extname(audioFilePath),
+            );
+            const sr = 44100;
+            const vocalPath = path.join(dir, `${base}_vocal.wav`);
+            const instruPath = path.join(dir, `${base}_instru.wav`);
+            writeWav(vocalPath, result.vocals, sr);
+            writeWav(instruPath, result.accompaniment, sr);
+          } catch (e) {
+            // silent
+          }
+        }
+
+        return {
+          vocals: {
+            type: 'Float32Array' as const,
+            data: Array.from(result.vocals),
+          },
+          accompaniment: {
+            type: 'Float32Array' as const,
+            data: Array.from(result.accompaniment),
+          },
+          onsets: result.onsets,
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[main] separation error:', err);
+        return { error: msg };
+      }
+    },
+  );
+
+  // ── BPM detection via worker ──
+
+  ipcMain.handle(
+    IPC.BPM_DETECT,
+    async (_event, audioData: Float32Array, sampleRate: number) => {
+      // @ts-expect-error dynamic import resolved by webpack
+      const { detectBpm } = await import('./bpm');
+      try {
+        const result = await detectBpm(audioData, sampleRate);
+        return result;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[main] bpm error:', err);
+        return { error: msg };
+      }
+    },
+  );
+
   function makeKey(pw?: string) {
     return (pw || '') + PW_SUFFIX;
   }

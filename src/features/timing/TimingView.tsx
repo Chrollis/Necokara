@@ -11,6 +11,7 @@ import {
   postSetBeat,
 } from '../../timing/operations';
 import inferSeparatorTimes from '../../timing/separator';
+import { isSeparatorWord } from '../../editor/word';
 import { getBpmAtTime, snapToBpmGrid } from '../../timing';
 import {
   detectRhythm,
@@ -51,6 +52,14 @@ interface TimingViewProps {
     duration: number,
     fileName: string,
   ) => void;
+  detectingBpm?: boolean;
+  onDetectingBpmChange?: (v: boolean) => void;
+  autoTimingBusy?: boolean;
+  onAutoTimingBusyChange?: (v: boolean) => void;
+  autoTimingProgress?: number;
+  onAutoTimingProgressChange?: (v: number) => void;
+  bpmProgress?: number;
+  onBpmProgressChange?: (v: number) => void;
 }
 
 export default function TimingView({
@@ -69,6 +78,14 @@ export default function TimingView({
   audioDuration,
   audioFileName,
   onAudioChange,
+  detectingBpm,
+  onDetectingBpmChange,
+  autoTimingBusy,
+  onAutoTimingBusyChange,
+  autoTimingProgress,
+  onAutoTimingProgressChange,
+  bpmProgress,
+  onBpmProgressChange,
 }: TimingViewProps) {
   const {
     currentTime,
@@ -90,7 +107,6 @@ export default function TimingView({
   const [multiLine, setMultiLine] = useState(false);
   const [timelineView, setTimelineView] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
-  const [detectingBpm, setDetectingBpm] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragCurrentTimeMs, setDragCurrentTimeMs] = useState<number | null>(
     null,
@@ -322,7 +338,7 @@ export default function TimingView({
       snack?.show('请先导入音频');
       return;
     }
-    setDetectingBpm(true);
+    onDetectingBpmChange?.(true);
     // Flush React state so button shows "分析中…" before blocking IPC
     await new Promise((r) => setTimeout(r, 16));
     try {
@@ -338,11 +354,189 @@ export default function TimingView({
       snack?.show('BPM 检测失败');
       console.error(err);
     } finally {
-      setDetectingBpm(false);
+      onDetectingBpmChange?.(false);
     }
-  }, [audioEngine, snack, updateState, state, onUndoRecord]);
+  }, [
+    audioEngine,
+    snack,
+    updateState,
+    state,
+    onUndoRecord,
+    onDetectingBpmChange,
+  ]);
 
-  const [autoTimingBusy, setAutoTimingBusy] = useState(false);
+  // ── Japanese moraic prolongation detection ──
+
+  const VOWEL_MAP: Record<string, string> = {
+    あ: 'a',
+    い: 'i',
+    う: 'u',
+    え: 'e',
+    お: 'o',
+    ア: 'a',
+    イ: 'i',
+    ウ: 'u',
+    エ: 'e',
+    オ: 'o',
+    か: 'a',
+    き: 'i',
+    く: 'u',
+    け: 'e',
+    こ: 'o',
+    カ: 'a',
+    キ: 'i',
+    ク: 'u',
+    ケ: 'e',
+    コ: 'o',
+    さ: 'a',
+    し: 'i',
+    す: 'u',
+    せ: 'e',
+    そ: 'o',
+    サ: 'a',
+    シ: 'i',
+    ス: 'u',
+    セ: 'e',
+    ソ: 'o',
+    た: 'a',
+    ち: 'i',
+    つ: 'u',
+    て: 'e',
+    と: 'o',
+    タ: 'a',
+    チ: 'i',
+    ツ: 'u',
+    テ: 'e',
+    ト: 'o',
+    な: 'a',
+    に: 'i',
+    ぬ: 'u',
+    ね: 'e',
+    の: 'o',
+    ナ: 'a',
+    ニ: 'i',
+    ヌ: 'u',
+    ネ: 'e',
+    ノ: 'o',
+    は: 'a',
+    ひ: 'i',
+    ふ: 'u',
+    へ: 'e',
+    ほ: 'o',
+    ハ: 'a',
+    ヒ: 'i',
+    フ: 'u',
+    ヘ: 'e',
+    ホ: 'o',
+    ま: 'a',
+    み: 'i',
+    む: 'u',
+    め: 'e',
+    も: 'o',
+    マ: 'a',
+    ミ: 'i',
+    ム: 'u',
+    メ: 'e',
+    モ: 'o',
+    や: 'a',
+    ゆ: 'u',
+    よ: 'o',
+    ヤ: 'a',
+    ユ: 'u',
+    ヨ: 'o',
+    ら: 'a',
+    り: 'i',
+    る: 'u',
+    れ: 'e',
+    ろ: 'o',
+    ラ: 'a',
+    リ: 'i',
+    ル: 'u',
+    レ: 'e',
+    ロ: 'o',
+    わ: 'a',
+    を: 'o',
+    ワ: 'a',
+    ヲ: 'o',
+    が: 'a',
+    ぎ: 'i',
+    ぐ: 'u',
+    げ: 'e',
+    ご: 'o',
+    ガ: 'a',
+    ギ: 'i',
+    グ: 'u',
+    ゲ: 'e',
+    ゴ: 'o',
+    ざ: 'a',
+    じ: 'i',
+    ず: 'u',
+    ぜ: 'e',
+    ぞ: 'o',
+    ザ: 'a',
+    ジ: 'i',
+    ズ: 'u',
+    ゼ: 'e',
+    ゾ: 'o',
+    だ: 'a',
+    ぢ: 'i',
+    づ: 'u',
+    で: 'e',
+    ど: 'o',
+    ダ: 'a',
+    ヂ: 'i',
+    ヅ: 'u',
+    デ: 'e',
+    ド: 'o',
+    ば: 'a',
+    び: 'i',
+    ぶ: 'u',
+    べ: 'e',
+    ぼ: 'o',
+    バ: 'a',
+    ビ: 'i',
+    ブ: 'u',
+    ベ: 'e',
+    ボ: 'o',
+    ぱ: 'a',
+    ぴ: 'i',
+    ぷ: 'u',
+    ぺ: 'e',
+    ぽ: 'o',
+    パ: 'a',
+    ピ: 'i',
+    プ: 'u',
+    ペ: 'e',
+    ポ: 'o',
+    ゃ: 'a',
+    ゅ: 'u',
+    ょ: 'o',
+    ャ: 'a',
+    ュ: 'u',
+    ョ: 'o',
+  };
+
+  function getVowelGroup(reading: string): string | null {
+    const last = reading[reading.length - 1];
+    return VOWEL_MAP[last] ?? null;
+  }
+
+  const PROLONG_RULES: Record<string, Set<string>> = {
+    a: new Set(['a']),
+    i: new Set(['i', 'u']),
+    u: new Set(['u']),
+    e: new Set(['e', 'i']),
+    o: new Set(['o', 'u']),
+  };
+
+  function isProlongation(prevReading: string, currReading: string): boolean {
+    if (/^[っッー〜]$/.test(currReading)) return true;
+    const prevVowel = getVowelGroup(prevReading);
+    const currVowel = getVowelGroup(currReading);
+    if (!prevVowel || !currVowel) return false;
+    const allowed = PROLONG_RULES[prevVowel];
+    return allowed ? allowed.has(currVowel) : false;
+  }
 
   const handleAutoTiming = useCallback(async () => {
     const rawData = audioEngine?.rawData;
@@ -350,29 +544,145 @@ export default function TimingView({
       snack?.show('请先导入音频');
       return;
     }
-    setAutoTimingBusy(true);
-    snack?.show('自动打轴中…', 0);
+    onAutoTimingBusyChange?.(true);
+    snack?.show('正在分离人声/伴奏…');
     await new Promise((r) => setTimeout(r, 16));
     try {
-      const onsets = await detectOnsets(rawData, audioEngine!.sampleRate);
+      const onsets = await detectOnsets(
+        rawData,
+        audioEngine!.sampleRate,
+        (p) => onAutoTimingProgressChange?.(p),
+        state.audioFilePath,
+      );
       if (!onsets || onsets.length === 0) {
         snack?.show('未检测到节拍');
         return;
       }
 
-      const beatRefs = lyrics.getBeatRefs();
-      const sylEntries: Array<{ wordIdx: number; sylIdx: number }> = [];
-      for (const ref of beatRefs) {
-        sylEntries.push({ wordIdx: ref.wordIndex, sylIdx: ref.sylIndex });
+      // ── Step 1: Infer phrase boundaries from onset gaps ──
+      const gaps: number[] = [];
+      for (let i = 1; i < onsets.length; i++) {
+        gaps.push(onsets[i] - onsets[i - 1]);
+      }
+      const sorted = [...gaps].sort((a, b) => a - b);
+      const medianGap = sorted[Math.floor(sorted.length / 2)];
+      const threshold = medianGap * 2.5;
+
+      // Split onsets into groups at large gaps
+      const onsetGroups: number[][] = [];
+      let curGroup: number[] = [onsets[0]];
+      for (let i = 1; i < onsets.length; i++) {
+        if (gaps[i - 1] > threshold) {
+          onsetGroups.push(curGroup);
+          curGroup = [onsets[i]];
+        } else {
+          curGroup.push(onsets[i]);
+        }
+      }
+      if (curGroup.length > 0) onsetGroups.push(curGroup);
+
+      // ── Step 2: Collect real syllables with prolongation markers ──
+      const allSylEntries: Array<{
+        wordIdx: number;
+        sylIdx: number;
+        isProlong: boolean;
+      }> = [];
+      for (let wi = 0; wi < lyrics.words.length; wi++) {
+        const word = lyrics.words[wi];
+        if (isSeparatorWord(word)) continue;
+        for (let si = 0; si < word.syllables.length; si++) {
+          const syl = word.syllables[si];
+          const prevEntry = allSylEntries[allSylEntries.length - 1];
+          const prevReading = prevEntry
+            ? lyrics.words[prevEntry.wordIdx].syllables[prevEntry.sylIdx]
+                .reading
+            : '';
+          const isProlong =
+            prevReading !== '' && isProlongation(prevReading, syl.reading);
+          allSylEntries.push({
+            wordIdx: wi,
+            sylIdx: si,
+            isProlong,
+          });
+        }
       }
 
-      const count = Math.min(sylEntries.length, onsets.length);
-      for (let i = 0; i < count; i++) {
-        const { wordIdx, sylIdx } = sylEntries[i];
-        const timeMs = Math.round(onsets[i]);
-        lyrics.setSyllableTime(wordIdx, sylIdx, { msec: timeMs });
+      const realSyl = allSylEntries.filter((e) => !e.isProlong);
+
+      // ── Step 3: Map onset groups to syllable groups ──
+      let sylIdx = 0;
+      let totalSet = 0;
+      for (const oGroup of onsetGroups) {
+        const avail = Math.min(oGroup.length, realSyl.length - sylIdx);
+        if (avail <= 0) break;
+        for (let i = 0; i < avail; i++) {
+          const { wordIdx, sylIdx: si } = realSyl[sylIdx];
+          lyrics.setSyllableTime(wordIdx, si, {
+            msec: Math.round(oGroup[i]),
+          });
+          sylIdx++;
+          totalSet++;
+        }
       }
 
+      // ── Step 4: Interpolate prolongation syllables ──
+      for (let i = 0; i < allSylEntries.length; i++) {
+        if (!allSylEntries[i].isProlong) continue;
+        const { wordIdx, sylIdx } = allSylEntries[i];
+        let prevTime: number | null = null;
+        for (let j = i - 1; j >= 0; j--) {
+          if (!allSylEntries[j].isProlong) {
+            const p = allSylEntries[j];
+            const ps = lyrics.words[p.wordIdx].syllables[p.sylIdx];
+            if (ps.isSet) {
+              prevTime = ps.time.msec;
+              break;
+            }
+          }
+        }
+        let nextTime: number | null = null;
+        for (let j = i + 1; j < allSylEntries.length; j++) {
+          if (!allSylEntries[j].isProlong) {
+            const n = allSylEntries[j];
+            const ns = lyrics.words[n.wordIdx].syllables[n.sylIdx];
+            if (ns.isSet) {
+              nextTime = ns.time.msec;
+              break;
+            }
+          }
+        }
+        if (prevTime !== null && nextTime !== null) {
+          lyrics.setSyllableTime(wordIdx, sylIdx, {
+            msec: Math.round((prevTime + nextTime) / 2),
+          });
+        } else if (prevTime !== null) {
+          lyrics.setSyllableTime(wordIdx, sylIdx, { msec: prevTime });
+        } else if (nextTime !== null) {
+          lyrics.setSyllableTime(wordIdx, sylIdx, { msec: nextTime });
+        }
+      }
+
+      // ── Step 5: Mismatch check ──
+      const expectedTotal = realSyl.length;
+      const mismatch = expectedTotal !== totalSet;
+
+      // Snap each set syllable to nearest 32nd note using existing BPM segments
+      const bpmSegments = state.fineTune.bpmSegments;
+      if (bpmSegments && bpmSegments.length > 0) {
+        const beatRefs = lyrics.getBeatRefs();
+        for (const ref of beatRefs) {
+          const word = lyrics.words[ref.wordIndex];
+          const syl = word.syllables[ref.sylIndex];
+          if (syl.isSet) {
+            const snapped = snapToBpmGrid(syl.time.msec, bpmSegments, 32);
+            lyrics.setSyllableTime(ref.wordIndex, ref.sylIndex, {
+              msec: Math.round(snapped),
+            });
+          }
+        }
+      }
+
+      // Infer separator timing between all adjacent beats
       const refs = lyrics.getBeatRefs();
       for (let bi = 0; bi < refs.length; bi++) {
         inferSeparatorTimes(lyrics, bi);
@@ -380,14 +690,28 @@ export default function TimingView({
 
       onRequestRender?.();
       onUndoRecord?.();
-      snack?.show(`自动打轴完成，已设置 ${count} 个音节`);
+      snack?.show(
+        mismatch
+          ? `自动打轴失败：结果与歌词不匹配（${totalSet}/${expectedTotal}）`
+          : `自动打轴完成，已设置 ${totalSet} 个音节`,
+      );
     } catch (err) {
       snack?.show('自动打轴失败：未能检测到有效节拍');
       console.error('[auto timing]', err);
     } finally {
-      setAutoTimingBusy(false);
+      onAutoTimingBusyChange?.(false);
     }
-  }, [audioEngine, lyrics, snack, onRequestRender, onUndoRecord]);
+  }, [
+    audioEngine,
+    lyrics,
+    state.fineTune.bpmSegments,
+    state.audioFilePath,
+    snack,
+    onRequestRender,
+    onUndoRecord,
+    onAutoTimingBusyChange,
+    onAutoTimingProgressChange,
+  ]);
 
   // Sync playback rate to audio engine
   useEffect(() => {
@@ -471,6 +795,7 @@ export default function TimingView({
     lyrics,
     setVerticalZoom,
     setVerticalOffset,
+    timelineView,
   });
 
   // ── Beat navigation ──
@@ -725,11 +1050,15 @@ export default function TimingView({
     onUndoRecord,
   ]);
 
-  // Auto-scroll lyrics to keep selected beat visible
-  // Only scrolls when the element is fully out of view, and positions
-  // it at ~1/3 from the start (leaving context before + room ahead).
+  // Auto-scroll lyrics to keep selected beat visible.
+  // Only scrolls when selectedBeatIndex actually changes (user interaction),
+  // not on every re-render during playback.
+  const prevBeatRef = useRef(state.selectedBeatIndex);
   useEffect(() => {
     if (state.selectedBeatIndex < 0) return;
+    // Skip if selection hasn't changed (e.g., viewData re-render during playback)
+    if (state.selectedBeatIndex === prevBeatRef.current && isPlaying) return;
+    prevBeatRef.current = state.selectedBeatIndex;
 
     // Multi-line: try data-beat-index first
     const multiEl = lyricsRef.current?.querySelector(
@@ -1051,9 +1380,11 @@ export default function TimingView({
         }}
         onImportAudio={handleImportAudio}
         onDetectBpm={handleDetectBpm}
-        detectingBpm={detectingBpm}
+        detectingBpm={detectingBpm ?? false}
         onAutoTiming={handleAutoTiming}
-        autoTimingDisabled={!audioEngine?.rawData || autoTimingBusy}
+        autoTimingBusy={autoTimingBusy}
+        bpmProgress={bpmProgress}
+        autoTimingProgress={autoTimingProgress}
       />
 
       {/* Lyrics row */}

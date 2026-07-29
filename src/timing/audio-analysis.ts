@@ -1,9 +1,11 @@
 /**
  * Renderer-side audio analysis.
  *
- * Delegates essentia.js BPM detection to the preload script via contextBridge.
+ * Vocal separation is performed in the main process via IPC (pleco-xa REPET-SIM).
+ * Onsets are computed in the worker thread and returned alongside vocals.
  */
 import type { BpmSegment } from './types';
+import IPC, { decodeFloatArray } from '../shared/ipc';
 
 export interface RhythmResult {
   bpm: number;
@@ -15,23 +17,66 @@ export async function detectRhythm(
   audioData: Float32Array,
   sampleRate: number,
 ): Promise<RhythmResult> {
-  const fn = window.electron?.audioAnalysis?.detectBpm;
-  if (!fn) throw new Error('BPM detection not available');
-  const result = fn(audioData, sampleRate);
+  const result = (await window.electron.ipcRenderer.invoke(
+    IPC.BPM_DETECT,
+    audioData,
+    sampleRate,
+  )) as RhythmResult | { error: string } | null;
+
   if (!result) throw new Error('BPM detection returned null');
+  if ('error' in result)
+    throw new Error(`BPM detection failed: ${result.error}`);
   return result as RhythmResult;
 }
 
-/** Detect onsets (note start times in ms) from raw PCM audio data. */
+/** Detect onsets from vocal-separated audio. */
 export async function detectOnsets(
   audioData: Float32Array,
   sampleRate: number,
+  onProgress?: (p: number) => void,
+  audioFilePath?: string,
 ): Promise<number[]> {
-  const fn = window.electron?.audioAnalysis?.detectOnsets;
-  if (!fn) throw new Error('Onset detection not available');
-  const result = fn(audioData, sampleRate) as number[] | null;
-  if (!result) throw new Error('Onset detection returned null');
-  return result;
+  // Step 1: Set up progress listener
+  let unsub: (() => void) | undefined;
+  if (onProgress) {
+    unsub = window.electron.ipcRenderer.on(
+      IPC.SEPARATE_PROGRESS,
+      (_pct: unknown) => {
+        onProgress(_pct as number);
+      },
+    );
+  }
+
+  // Step 2: Separate vocals via main process (IPC, non-blocking)
+  // Worker returns vocals, accompaniment, and onsets
+  const sepResult = (await window.electron.ipcRenderer.invoke(
+    IPC.SEPARATE_AUDIO,
+    audioData,
+    sampleRate,
+    audioFilePath,
+  )) as
+    | {
+        vocals: { type: string; data: number[] };
+        accompaniment: { type: string; data: number[] };
+        onsets: number[];
+      }
+    | { error: string }
+    | null;
+
+  unsub?.();
+
+  if (!sepResult) throw new Error('Vocal separation returned null');
+  if ('error' in sepResult)
+    throw new Error(
+      `Vocal separation failed: ${(sepResult as { error: string }).error}`,
+    );
+
+  // Onsets are already computed in the worker
+  const onsets = (sepResult as any).onsets as number[];
+  if (!onsets || onsets.length === 0)
+    throw new Error('Onset detection returned null');
+
+  return onsets;
 }
 
 export function segmentBpmChanges(

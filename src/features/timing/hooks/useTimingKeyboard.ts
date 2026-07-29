@@ -12,6 +12,7 @@ interface UseTimingKeyboardOptions {
   lyrics: Lyrics;
   setVerticalZoom: React.Dispatch<React.SetStateAction<number>>;
   setVerticalOffset: React.Dispatch<React.SetStateAction<number>>;
+  timelineView?: boolean;
 }
 
 export default function useTimingKeyboard({
@@ -23,6 +24,7 @@ export default function useTimingKeyboard({
   lyrics,
   setVerticalZoom,
   setVerticalOffset,
+  timelineView,
 }: UseTimingKeyboardOptions): void {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -31,6 +33,17 @@ export default function useTimingKeyboard({
         e.target instanceof HTMLTextAreaElement
       )
         return;
+
+      // Prevent beat/card shortcuts in timeline view
+      const isBeatShortcut =
+        e.key === ' ' ||
+        e.key === 'Enter' ||
+        e.key === 'Backspace' ||
+        e.key === 'Delete' ||
+        e.key === 'ArrowRight' ||
+        e.key === 'ArrowLeft';
+      if (timelineView && isBeatShortcut) return;
+
       if (e.key === ' ') {
         e.preventDefault();
         handleSetBeat();

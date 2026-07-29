@@ -212,3 +212,19 @@
   border-radius: 0;
   white-space: nowrap;
 }
+
+/* ── Spinner animation for loading buttons ── */
+
+@keyframes tv-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.shared-btn.tv-loading .mdi {
+  animation: tv-spin 1s linear infinite;
+}
+
+/* Indeterminate spinner SVG */
+.shared-btn.tv-loading .tv-spinner {
+  animation: tv-spin 1s linear infinite;
+}

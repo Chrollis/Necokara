@@ -30,7 +30,9 @@ interface TimingToolbarProps {
   onImportAudio: () => void;
   onDetectBpm?: () => void;
   onAutoTiming?: () => void;
-  autoTimingDisabled?: boolean;
+  autoTimingBusy?: boolean;
+  bpmProgress?: number;
+  autoTimingProgress?: number;
 }
 
 export default function TimingToolbar({
@@ -57,7 +59,9 @@ export default function TimingToolbar({
   onImportAudio,
   onDetectBpm,
   onAutoTiming,
-  autoTimingDisabled,
+  autoTimingBusy,
+  bpmProgress,
+  autoTimingProgress,
 }: TimingToolbarProps) {
   const compInputRef = useRef<HTMLInputElement>(null);
   const speedInputRef = useRef<HTMLInputElement>(null);
@@ -168,9 +172,10 @@ export default function TimingToolbar({
             <ToolbarButton
               icon="chart-bell-curve-cumulative"
               onClick={onDetectBpm!}
-              disabled={!audioEngine || detectingBpm}
+              disabled={!audioEngine}
+              loading={detectingBpm}
             >
-              {detectingBpm ? '分析中…' : '自动BPM'}
+              自动BPM
             </ToolbarButton>
           </>
         )}
@@ -188,7 +193,8 @@ export default function TimingToolbar({
             <ToolbarButton
               icon="auto-fix"
               onClick={onAutoTiming}
-              disabled={autoTimingDisabled}
+              disabled={!audioEngine?.rawData}
+              loading={autoTimingBusy}
             >
               自动打轴
             </ToolbarButton>

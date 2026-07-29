@@ -76,7 +76,7 @@ export function deserializeTimingState(
           typeof seg.bpm === 'number' && typeof seg.start === 'number',
       )
       .map((seg) => ({
-        bpm: seg.bpm < 0 ? 0 : Math.round(seg.bpm),
+        bpm: seg.bpm < 0 ? 0 : Math.round(seg.bpm * 10) / 10,
         start: Math.max(0, Math.round(seg.start)),
       }))
       .sort((a, b) => a.start - b.start);

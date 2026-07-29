@@ -129,11 +129,11 @@ export default function TimingFineTuneView({
     if (!modal) return;
     const raw = modalValue.trim();
     if (modal.type === 'bpm' && modal.segIndex !== undefined) {
-      const bpm = parseInt(raw, 10);
+      const bpm = parseFloat(raw);
       if (bpm >= 0) {
         onUpdateBpm(modal.segIndex, bpm);
         setModal(null);
-      } else snack?.show('BPM 必须为非负整数');
+      } else snack?.show('BPM 必须为非负数');
     } else if (modal.type === 'time' && modal.segIndex !== undefined) {
       const parsed = parseTime(raw);
       if (parsed.msec >= 0 && /[0-9]/.test(raw)) {
@@ -141,11 +141,11 @@ export default function TimingFineTuneView({
         setModal(null);
       } else snack?.show('时间格式无效');
     } else if (modal.type === 'newSeg' && modal.clickTimeMs !== undefined) {
-      const bpm = parseInt(raw, 10);
+      const bpm = parseFloat(raw);
       if (bpm >= 0) {
         onAddSegment(modal.clickTimeMs, bpm);
         setModal(null);
-      } else snack?.show('BPM 必须为非负整数');
+      } else snack?.show('BPM 必须为非负数');
     } else {
       setModal(null);
     }

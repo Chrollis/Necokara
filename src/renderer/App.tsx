@@ -43,6 +43,10 @@ export default function App() {
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioFileName, setAudioFileName] = useState('');
   const [projectKey, setProjectKey] = useState(0);
+  const [detectingBpm, setDetectingBpm] = useState(false);
+  const [autoTimingBusy, setAutoTimingBusy] = useState(false);
+  const [bpmProgress, setBpmProgress] = useState<number>(-1);
+  const [autoTimingProgress, setAutoTimingProgress] = useState<number>(-1);
 
   const handleProjectChange = useCallback(() => {
     setProjectKey((k) => k + 1);
@@ -236,6 +240,14 @@ export default function App() {
           audioDuration={audioDuration}
           audioFileName={audioFileName}
           onAudioChange={handleAudioChange}
+          detectingBpm={detectingBpm}
+          onDetectingBpmChange={setDetectingBpm}
+          autoTimingBusy={autoTimingBusy}
+          onAutoTimingBusyChange={setAutoTimingBusy}
+          autoTimingProgress={autoTimingProgress}
+          onAutoTimingProgressChange={setAutoTimingProgress}
+          bpmProgress={bpmProgress}
+          onBpmProgressChange={setBpmProgress}
         />
       )}
       {confirmDialog && (
