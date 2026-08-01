@@ -1,11 +1,10 @@
 /**
  * Renderer-side audio analysis.
  *
- * Vocal separation is performed in the main process via IPC (pleco-xa REPET-SIM).
- * Onsets are computed in the worker thread and returned alongside vocals.
+ * BPM detection runs in the main process via IPC (pleco worker).
  */
 import type { BpmSegment } from './types';
-import IPC, { decodeFloatArray } from '../shared/ipc';
+import IPC from '../shared/ipc';
 
 export interface RhythmResult {
   bpm: number;
@@ -29,54 +28,127 @@ export async function detectRhythm(
   return result as RhythmResult;
 }
 
-/** Detect onsets from vocal-separated audio. */
-export async function detectOnsets(
-  audioData: Float32Array,
+export interface AlignSegment {
+  start: number;
+  end: number;
+  text: string;
+  tokens: number[];
+}
+
+export interface SeparateAudioOptions {
+  computeInstru: boolean;
+  outputDir?: string | null;
+  exportBaseName?: string | null;
+}
+
+export interface SeparateResult {
+  vocalsPath: string;
+  exported: string[];
+}
+
+export interface AutoTimingCheckResult {
+  separateModelOk: boolean;
+  whisperModelOk: boolean;
+  whisperLanguages: Array<{ code: string; id: number }>;
+}
+
+/**
+ * Separate vocals in the main process (MDX-Net worker) from decoded PCM.
+ * @returns separated vocals temp wav path + exported files
+ */
+export async function separateVocals(
+  audioData: Float32Array[],
   sampleRate: number,
+  options: SeparateAudioOptions,
   onProgress?: (p: number) => void,
-  audioFilePath?: string,
-): Promise<number[]> {
-  // Step 1: Set up progress listener
+): Promise<SeparateResult> {
   let unsub: (() => void) | undefined;
   if (onProgress) {
     unsub = window.electron.ipcRenderer.on(
       IPC.SEPARATE_PROGRESS,
-      (_pct: unknown) => {
-        onProgress(_pct as number);
+      (_p: unknown) => {
+        onProgress(_p as number);
       },
     );
   }
-
-  // Step 2: Separate vocals via main process (IPC, non-blocking)
-  // Worker returns vocals, accompaniment, and onsets
-  const sepResult = (await window.electron.ipcRenderer.invoke(
+  const res = (await window.electron.ipcRenderer.invoke(
     IPC.SEPARATE_AUDIO,
     audioData,
     sampleRate,
-    audioFilePath,
-  )) as
-    | {
-        vocals: { type: string; data: number[] };
-        accompaniment: { type: string; data: number[] };
-        onsets: number[];
-      }
-    | { error: string }
-    | null;
-
+    options,
+  )) as { vocalsPath: string; exported: string[] } | { error: string } | null;
   unsub?.();
+  if (!res) throw new Error('Vocal separation returned null');
+  if ('error' in res) throw new Error(`Vocal separation failed: ${res.error}`);
+  return res;
+}
 
-  if (!sepResult) throw new Error('Vocal separation returned null');
-  if ('error' in sepResult)
-    throw new Error(
-      `Vocal separation failed: ${(sepResult as { error: string }).error}`,
+/**
+ * Whisper-align separated vocals in the main process (worker thread).
+ * @param lyricsPrompt lyric furigana text to bias transcription
+ * @param clean optional noise-gate settings for instrumental residue
+ * @returns timestamped segments
+ */
+export async function alignVocals(
+  vocalsPath: string,
+  languageToken: number,
+  lyricsPrompt?: string,
+  clean?: { enabled: boolean; threshold: number },
+  onProgress?: (p: number) => void,
+): Promise<AlignSegment[]> {
+  let unsub: (() => void) | undefined;
+  if (onProgress) {
+    unsub = window.electron.ipcRenderer.on(
+      IPC.WHISPER_ALIGN_PROGRESS,
+      (_p: unknown) => {
+        onProgress(_p as number);
+      },
     );
+  }
+  const res = (await window.electron.ipcRenderer.invoke(
+    IPC.WHISPER_ALIGN,
+    vocalsPath,
+    languageToken,
+    lyricsPrompt ?? undefined,
+    clean,
+  )) as { segments: AlignSegment[] } | { error: string } | null;
+  unsub?.();
+  if (!res) throw new Error('Alignment returned null');
+  if ('error' in res) throw new Error(`Alignment failed: ${res.error}`);
+  return res.segments;
+}
 
-  // Onsets are already computed in the worker
-  const onsets = (sepResult as any).onsets as number[];
-  if (!onsets || onsets.length === 0)
-    throw new Error('Onset detection returned null');
+/** Read an audio file into an ArrayBuffer (decoded on the renderer side). */
+export async function readAudioBuffer(
+  audioFilePath: string,
+): Promise<ArrayBuffer> {
+  const res = (await window.electron.ipcRenderer.invoke(
+    IPC.AUDIO_READ_BUFFER,
+    audioFilePath,
+  )) as { data: ArrayBuffer } | { error: string } | null;
+  if (!res) throw new Error('Read audio returned null');
+  if ('error' in res) throw new Error(`Read audio failed: ${res.error}`);
+  return res.data;
+}
 
-  return onsets;
+/** Read a WAV header (sample rate + frame count) via the main process. */
+export async function getWavInfo(
+  filePath: string,
+): Promise<{ sampleRate: number; frames: number } | null> {
+  const res = (await window.electron.ipcRenderer.invoke(
+    IPC.AUDIO_WAV_INFO,
+    filePath,
+  )) as { sampleRate: number; frames: number } | { error: string } | null;
+  if (!res || 'error' in res) return null;
+  return res;
+}
+
+/** Preflight check for auto timing (models + whisper language support). */
+export async function checkAutoTiming(): Promise<AutoTimingCheckResult> {
+  const res = (await window.electron.ipcRenderer.invoke(
+    IPC.AUTO_TIMING_CHECK,
+  )) as AutoTimingCheckResult;
+  return res;
 }
 
 export function segmentBpmChanges(

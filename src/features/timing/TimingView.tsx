@@ -16,12 +16,21 @@ import { getBpmAtTime, snapToBpmGrid } from '../../timing';
 import {
   detectRhythm,
   segmentBpmChanges,
-  detectOnsets,
+  separateVocals,
+  alignVocals,
+  checkAutoTiming,
+  readAudioBuffer,
+  getWavInfo,
+  type SeparateResult,
 } from '../../timing/audio-analysis';
+import { alignSegmentsToLyrics } from '../../timing/whisper/align';
+import type { WhisperSegment } from '../../timing/whisper/transcribe';
+import AutoTimingDialog from './AutoTimingDialog';
+import type { AutoTimingOptions } from './AutoTimingDialog';
 import { setSyllableTime, unsetSyllableTime } from '../../editor/syllable';
-import { parseTime, formatTime } from '../../editor/time';
-import useAudioPlayback from './hooks/useAudioPlayback';
+import { parseTime, formatTime, createTime } from '../../editor/time';
 import useTimingKeyboard from './hooks/useTimingKeyboard';
+import { useTimingRuntime } from '../../renderer/store/timingRuntime';
 import AudioEngine from './AudioEngine';
 import Waveform from './Waveform';
 import TimeRuler from './TimeRuler';
@@ -31,6 +40,51 @@ import TimingCanvasCtxMenu from './TimingCanvasCtxMenu';
 import TimingCardCtxMenu from './TimingCardCtxMenu';
 import TimingFineTuneView from './TimingFineTuneView';
 import './timing.css';
+
+/** Derive the cached vocals path next to the source audio (`源名-vocal.wav`). */
+function vocalCachePath(audioPath: string): string {
+  const p = audioPath.replace(/\\/g, '/');
+  const lastSlash = p.lastIndexOf('/');
+  const dir = lastSlash >= 0 ? p.slice(0, lastSlash) : '';
+  const file = lastSlash >= 0 ? p.slice(lastSlash + 1) : p;
+  const dot = file.lastIndexOf('.');
+  const base = dot > 0 ? file.slice(0, dot) : file;
+  return dir ? `${dir}/${base}-vocal.wav` : `${base}-vocal.wav`;
+}
+
+/**
+ * Snap every timed syllable to the nearest 32nd-note grid of the stored BPM
+ * segments (32nd = one eighth of a quarter-note beat). Only touches already
+ * timed syllables; separators are left as-is.
+ */
+function snapToBeatGrid(
+  lyrics: Lyrics,
+  bpmSegments: { bpm: number; start: number }[],
+): void {
+  if (!bpmSegments || bpmSegments.length === 0) return;
+  const findBpm = (t: number): { bpm: number; start: number } => {
+    let seg = bpmSegments[0];
+    for (const s of bpmSegments) {
+      if (s.start <= t) seg = s;
+      else break;
+    }
+    return seg;
+  };
+  lyrics.words.forEach((word) => {
+    if (isSeparatorWord(word)) return;
+    word.syllables.forEach((syl, si) => {
+      if (!syl.isSet) return;
+      const t = syl.time.msec;
+      const seg = findBpm(t);
+      const gridMs = 60000 / seg.bpm / 8;
+      const snapped = seg.start + Math.round((t - seg.start) / gridMs) * gridMs;
+      word.syllables[si] = setSyllableTime(
+        word.syllables[si],
+        createTime(Math.max(0, Math.round(snapped))),
+      );
+    });
+  });
+}
 
 interface TimingViewProps {
   lyrics: Lyrics;
@@ -58,6 +112,8 @@ interface TimingViewProps {
   onAutoTimingBusyChange?: (v: boolean) => void;
   autoTimingProgress?: number;
   onAutoTimingProgressChange?: (v: number) => void;
+  autoTimingStage?: 'separate' | 'align' | null;
+  onAutoTimingStageChange?: (s: 'separate' | 'align' | null) => void;
   bpmProgress?: number;
   onBpmProgressChange?: (v: number) => void;
 }
@@ -84,6 +140,8 @@ export default function TimingView({
   onAutoTimingBusyChange,
   autoTimingProgress,
   onAutoTimingProgressChange,
+  autoTimingStage,
+  onAutoTimingStageChange,
   bpmProgress,
   onBpmProgressChange,
 }: TimingViewProps) {
@@ -95,18 +153,26 @@ export default function TimingView({
     togglePlay,
     setCurrentTime,
     setIsPlaying,
-  } = useAudioPlayback({ audioEngine, audioDuration });
+    zoomLevel,
+    setZoomLevel,
+    scrollOffset,
+    setScrollOffset,
+    compensationMs,
+    setCompensationMs,
+    verticalZoom,
+    setVerticalZoom,
+    verticalOffset,
+    setVerticalOffset,
+    multiLine,
+    setMultiLine,
+    timelineView,
+    setTimelineView,
+    snapToGrid,
+    setSnapToGrid,
+    speed,
+    setSpeed,
+  } = useTimingRuntime();
 
-  // zoom: 1x = full song visible, higher = zoomed in
-  // max zoom so viewport shows at least 2 seconds
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const [compensationMs, setCompensationMs] = useState(0);
-  const [verticalZoom, setVerticalZoom] = useState(1);
-  const [verticalOffset, setVerticalOffset] = useState(0);
-  const [multiLine, setMultiLine] = useState(false);
-  const [timelineView, setTimelineView] = useState(false);
-  const [snapToGrid, setSnapToGrid] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragCurrentTimeMs, setDragCurrentTimeMs] = useState<number | null>(
     null,
@@ -125,11 +191,13 @@ export default function TimingView({
     startTimeMs: number;
     offsetMs: number;
   } | null>(null);
-  const [speed, setSpeed] = useState(1.0);
   const [editingBeatIndex, setEditingBeatIndex] = useState<number | null>(null);
   const [editingWordIndex, setEditingWordIndex] = useState<number | null>(null);
   const [editingTimeValue, setEditingTimeValue] = useState('');
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [autoTimingDialog, setAutoTimingDialog] = useState<{
+    languages: Array<{ code: string; id: number }>;
+  } | null>(null);
   const [cardCtxMenu, setCardCtxMenu] = useState<{
     x: number;
     y: number;
@@ -365,358 +433,159 @@ export default function TimingView({
     onDetectingBpmChange,
   ]);
 
-  // ── Japanese moraic prolongation detection ──
-
-  const VOWEL_MAP: Record<string, string> = {
-    あ: 'a',
-    い: 'i',
-    う: 'u',
-    え: 'e',
-    お: 'o',
-    ア: 'a',
-    イ: 'i',
-    ウ: 'u',
-    エ: 'e',
-    オ: 'o',
-    か: 'a',
-    き: 'i',
-    く: 'u',
-    け: 'e',
-    こ: 'o',
-    カ: 'a',
-    キ: 'i',
-    ク: 'u',
-    ケ: 'e',
-    コ: 'o',
-    さ: 'a',
-    し: 'i',
-    す: 'u',
-    せ: 'e',
-    そ: 'o',
-    サ: 'a',
-    シ: 'i',
-    ス: 'u',
-    セ: 'e',
-    ソ: 'o',
-    た: 'a',
-    ち: 'i',
-    つ: 'u',
-    て: 'e',
-    と: 'o',
-    タ: 'a',
-    チ: 'i',
-    ツ: 'u',
-    テ: 'e',
-    ト: 'o',
-    な: 'a',
-    に: 'i',
-    ぬ: 'u',
-    ね: 'e',
-    の: 'o',
-    ナ: 'a',
-    ニ: 'i',
-    ヌ: 'u',
-    ネ: 'e',
-    ノ: 'o',
-    は: 'a',
-    ひ: 'i',
-    ふ: 'u',
-    へ: 'e',
-    ほ: 'o',
-    ハ: 'a',
-    ヒ: 'i',
-    フ: 'u',
-    ヘ: 'e',
-    ホ: 'o',
-    ま: 'a',
-    み: 'i',
-    む: 'u',
-    め: 'e',
-    も: 'o',
-    マ: 'a',
-    ミ: 'i',
-    ム: 'u',
-    メ: 'e',
-    モ: 'o',
-    や: 'a',
-    ゆ: 'u',
-    よ: 'o',
-    ヤ: 'a',
-    ユ: 'u',
-    ヨ: 'o',
-    ら: 'a',
-    り: 'i',
-    る: 'u',
-    れ: 'e',
-    ろ: 'o',
-    ラ: 'a',
-    リ: 'i',
-    ル: 'u',
-    レ: 'e',
-    ロ: 'o',
-    わ: 'a',
-    を: 'o',
-    ワ: 'a',
-    ヲ: 'o',
-    が: 'a',
-    ぎ: 'i',
-    ぐ: 'u',
-    げ: 'e',
-    ご: 'o',
-    ガ: 'a',
-    ギ: 'i',
-    グ: 'u',
-    ゲ: 'e',
-    ゴ: 'o',
-    ざ: 'a',
-    じ: 'i',
-    ず: 'u',
-    ぜ: 'e',
-    ぞ: 'o',
-    ザ: 'a',
-    ジ: 'i',
-    ズ: 'u',
-    ゼ: 'e',
-    ゾ: 'o',
-    だ: 'a',
-    ぢ: 'i',
-    づ: 'u',
-    で: 'e',
-    ど: 'o',
-    ダ: 'a',
-    ヂ: 'i',
-    ヅ: 'u',
-    デ: 'e',
-    ド: 'o',
-    ば: 'a',
-    び: 'i',
-    ぶ: 'u',
-    べ: 'e',
-    ぼ: 'o',
-    バ: 'a',
-    ビ: 'i',
-    ブ: 'u',
-    ベ: 'e',
-    ボ: 'o',
-    ぱ: 'a',
-    ぴ: 'i',
-    ぷ: 'u',
-    ぺ: 'e',
-    ぽ: 'o',
-    パ: 'a',
-    ピ: 'i',
-    プ: 'u',
-    ペ: 'e',
-    ポ: 'o',
-    ゃ: 'a',
-    ゅ: 'u',
-    ょ: 'o',
-    ャ: 'a',
-    ュ: 'u',
-    ョ: 'o',
-  };
-
-  function getVowelGroup(reading: string): string | null {
-    const last = reading[reading.length - 1];
-    return VOWEL_MAP[last] ?? null;
-  }
-
-  const PROLONG_RULES: Record<string, Set<string>> = {
-    a: new Set(['a']),
-    i: new Set(['i', 'u']),
-    u: new Set(['u']),
-    e: new Set(['e', 'i']),
-    o: new Set(['o', 'u']),
-  };
-
-  function isProlongation(prevReading: string, currReading: string): boolean {
-    if (/^[っッー〜]$/.test(currReading)) return true;
-    const prevVowel = getVowelGroup(prevReading);
-    const currVowel = getVowelGroup(currReading);
-    if (!prevVowel || !currVowel) return false;
-    const allowed = PROLONG_RULES[prevVowel];
-    return allowed ? allowed.has(currVowel) : false;
-  }
-
   const handleAutoTiming = useCallback(async () => {
-    const rawData = audioEngine?.rawData;
-    if (!rawData) {
+    if (!state.audioFilePath) {
       snack?.show('请先导入音频');
       return;
     }
-    onAutoTimingBusyChange?.(true);
-    snack?.show('正在分离人声/伴奏…');
-    await new Promise((r) => setTimeout(r, 16));
     try {
-      const onsets = await detectOnsets(
-        rawData,
-        audioEngine!.sampleRate,
-        (p) => onAutoTimingProgressChange?.(p),
-        state.audioFilePath,
-      );
-      if (!onsets || onsets.length === 0) {
-        snack?.show('未检测到节拍');
+      const check = await checkAutoTiming();
+      const problems: string[] = [];
+      if (!check.separateModelOk) problems.push('缺少人声分离模型');
+      if (!check.whisperModelOk)
+        problems.push('缺少 whisper 模型或模型不支持多语言');
+      if (problems.length > 0) {
+        snack?.show(
+          `自动打轴不可用：${problems.join('、')}，请检查「资源配置」`,
+        );
         return;
       }
-
-      // ── Step 1: Infer phrase boundaries from onset gaps ──
-      const gaps: number[] = [];
-      for (let i = 1; i < onsets.length; i++) {
-        gaps.push(onsets[i] - onsets[i - 1]);
-      }
-      const sorted = [...gaps].sort((a, b) => a - b);
-      const medianGap = sorted[Math.floor(sorted.length / 2)];
-      const threshold = medianGap * 2.5;
-
-      // Split onsets into groups at large gaps
-      const onsetGroups: number[][] = [];
-      let curGroup: number[] = [onsets[0]];
-      for (let i = 1; i < onsets.length; i++) {
-        if (gaps[i - 1] > threshold) {
-          onsetGroups.push(curGroup);
-          curGroup = [onsets[i]];
-        } else {
-          curGroup.push(onsets[i]);
-        }
-      }
-      if (curGroup.length > 0) onsetGroups.push(curGroup);
-
-      // ── Step 2: Collect real syllables with prolongation markers ──
-      const allSylEntries: Array<{
-        wordIdx: number;
-        sylIdx: number;
-        isProlong: boolean;
-      }> = [];
-      for (let wi = 0; wi < lyrics.words.length; wi++) {
-        const word = lyrics.words[wi];
-        if (isSeparatorWord(word)) continue;
-        for (let si = 0; si < word.syllables.length; si++) {
-          const syl = word.syllables[si];
-          const prevEntry = allSylEntries[allSylEntries.length - 1];
-          const prevReading = prevEntry
-            ? lyrics.words[prevEntry.wordIdx].syllables[prevEntry.sylIdx]
-                .reading
-            : '';
-          const isProlong =
-            prevReading !== '' && isProlongation(prevReading, syl.reading);
-          allSylEntries.push({
-            wordIdx: wi,
-            sylIdx: si,
-            isProlong,
-          });
-        }
-      }
-
-      const realSyl = allSylEntries.filter((e) => !e.isProlong);
-
-      // ── Step 3: Map onset groups to syllable groups ──
-      let sylIdx = 0;
-      let totalSet = 0;
-      for (const oGroup of onsetGroups) {
-        const avail = Math.min(oGroup.length, realSyl.length - sylIdx);
-        if (avail <= 0) break;
-        for (let i = 0; i < avail; i++) {
-          const { wordIdx, sylIdx: si } = realSyl[sylIdx];
-          lyrics.setSyllableTime(wordIdx, si, {
-            msec: Math.round(oGroup[i]),
-          });
-          sylIdx++;
-          totalSet++;
-        }
-      }
-
-      // ── Step 4: Interpolate prolongation syllables ──
-      for (let i = 0; i < allSylEntries.length; i++) {
-        if (!allSylEntries[i].isProlong) continue;
-        const { wordIdx, sylIdx } = allSylEntries[i];
-        let prevTime: number | null = null;
-        for (let j = i - 1; j >= 0; j--) {
-          if (!allSylEntries[j].isProlong) {
-            const p = allSylEntries[j];
-            const ps = lyrics.words[p.wordIdx].syllables[p.sylIdx];
-            if (ps.isSet) {
-              prevTime = ps.time.msec;
-              break;
-            }
-          }
-        }
-        let nextTime: number | null = null;
-        for (let j = i + 1; j < allSylEntries.length; j++) {
-          if (!allSylEntries[j].isProlong) {
-            const n = allSylEntries[j];
-            const ns = lyrics.words[n.wordIdx].syllables[n.sylIdx];
-            if (ns.isSet) {
-              nextTime = ns.time.msec;
-              break;
-            }
-          }
-        }
-        if (prevTime !== null && nextTime !== null) {
-          lyrics.setSyllableTime(wordIdx, sylIdx, {
-            msec: Math.round((prevTime + nextTime) / 2),
-          });
-        } else if (prevTime !== null) {
-          lyrics.setSyllableTime(wordIdx, sylIdx, { msec: prevTime });
-        } else if (nextTime !== null) {
-          lyrics.setSyllableTime(wordIdx, sylIdx, { msec: nextTime });
-        }
-      }
-
-      // ── Step 5: Mismatch check ──
-      const expectedTotal = realSyl.length;
-      const mismatch = expectedTotal !== totalSet;
-
-      // Snap each set syllable to nearest 32nd note using existing BPM segments
-      const bpmSegments = state.fineTune.bpmSegments;
-      if (bpmSegments && bpmSegments.length > 0) {
-        const beatRefs = lyrics.getBeatRefs();
-        for (const ref of beatRefs) {
-          const word = lyrics.words[ref.wordIndex];
-          const syl = word.syllables[ref.sylIndex];
-          if (syl.isSet) {
-            const snapped = snapToBpmGrid(syl.time.msec, bpmSegments, 32);
-            lyrics.setSyllableTime(ref.wordIndex, ref.sylIndex, {
-              msec: Math.round(snapped),
-            });
-          }
-        }
-      }
-
-      // Infer separator timing between all adjacent beats
-      const refs = lyrics.getBeatRefs();
-      for (let bi = 0; bi < refs.length; bi++) {
-        inferSeparatorTimes(lyrics, bi);
-      }
-
-      onRequestRender?.();
-      onUndoRecord?.();
-      snack?.show(
-        mismatch
-          ? `自动打轴失败：结果与歌词不匹配（${totalSet}/${expectedTotal}）`
-          : `自动打轴完成，已设置 ${totalSet} 个音节`,
-      );
+      setAutoTimingDialog({ languages: check.whisperLanguages });
     } catch (err) {
-      snack?.show('自动打轴失败：未能检测到有效节拍');
-      console.error('[auto timing]', err);
-    } finally {
-      onAutoTimingBusyChange?.(false);
+      snack?.show('自动打轴检查失败');
+      console.error('[auto timing check]', err);
     }
-  }, [
-    audioEngine,
-    lyrics,
-    state.fineTune.bpmSegments,
-    state.audioFilePath,
-    snack,
-    onRequestRender,
-    onUndoRecord,
-    onAutoTimingBusyChange,
-    onAutoTimingProgressChange,
-  ]);
+  }, [state.audioFilePath, snack]);
 
-  // Sync playback rate to audio engine
-  useEffect(() => {
-    audioEngine?.setPlaybackRate(speed);
-  }, [audioEngine, speed]);
+  const handleAutoTimingConfirm = useCallback(
+    async (options: AutoTimingOptions) => {
+      setAutoTimingDialog(null);
+      if (!state.audioFilePath) return;
+      onAutoTimingBusyChange?.(true);
+      try {
+        // 1. read + decode audio (Chromium built-in codecs)
+        snack?.show('正在解码音频…');
+        const buf = await readAudioBuffer(state.audioFilePath);
+        const ctx = new AudioContext();
+        const decoded = await ctx.decodeAudioData(buf);
+        await ctx.close();
+        const channels: Float32Array[] = [];
+        const nCh = Math.min(decoded.numberOfChannels, 2);
+        for (let c = 0; c < nCh; c++) channels.push(decoded.getChannelData(c));
+        if (channels.length === 0) {
+          snack?.show('音频解码失败');
+          return;
+        }
+
+        // 2. export target (only when exporting)
+        let outputDir: string | null = null;
+        let exportBaseName: string | null = null;
+        if (options.exportVocals) {
+          const p = state.audioFilePath.replace(/\\/g, '/');
+          const lastSlash = p.lastIndexOf('/');
+          const dir = lastSlash >= 0 ? p.slice(0, lastSlash) : '';
+          const file = lastSlash >= 0 ? p.slice(lastSlash + 1) : p;
+          const dot = file.lastIndexOf('.');
+          outputDir = dir;
+          exportBaseName = dot > 0 ? file.slice(0, dot) : file;
+        }
+
+        // 3. separate (or reuse a cached `音频名-vocal.wav` when it matches
+        //    the source duration — separation is skipped entirely, so the
+        //    export checkboxes are ignored for cached runs)
+        onAutoTimingProgressChange?.(0);
+        onAutoTimingStageChange?.('separate');
+        let sep: SeparateResult | undefined;
+        const cachePath = options.useSeparateCache
+          ? vocalCachePath(state.audioFilePath)
+          : null;
+        if (cachePath) {
+          const info = await getWavInfo(cachePath);
+          const srcDur = decoded.duration;
+          const cacheDur = info ? info.frames / info.sampleRate : 0;
+          if (info && Math.abs(cacheDur - srcDur) < 0.25) {
+            sep = { vocalsPath: cachePath, exported: [] };
+            snack?.show('使用分离缓存…');
+          } else {
+            snack?.show('未找到匹配的分离缓存，重新分离…');
+          }
+        }
+        if (!sep) {
+          sep = await separateVocals(
+            channels,
+            decoded.sampleRate,
+            {
+              computeInstru: options.exportVocals,
+              outputDir,
+              exportBaseName,
+            },
+            (p) => onAutoTimingProgressChange?.(p),
+          );
+        }
+
+        if (options.separateOnly) {
+          snack?.show(
+            options.exportVocals
+              ? `分离完成，已输出 ${sep.exported.length} 个文件`
+              : '分离完成',
+          );
+          return;
+        }
+
+        // 4. align
+        onAutoTimingProgressChange?.(0);
+        onAutoTimingStageChange?.('align');
+        snack?.show('正在 whisper 对齐…');
+        const lyricsPrompt = lyrics.words.map((w) => w.reading).join('');
+        const clean =
+          options.cleanVocal !== false
+            ? { enabled: true, threshold: options.cleanThreshold ?? 12 }
+            : { enabled: false, threshold: 0 };
+        const segments = await alignVocals(
+          sep.vocalsPath,
+          options.languageToken,
+          lyricsPrompt,
+          clean,
+          (p) => onAutoTimingProgressChange?.(p),
+        );
+        if (!segments || segments.length === 0) {
+          snack?.show('whisper 未检测到有效内容');
+          return;
+        }
+
+        // 5. apply
+        alignSegmentsToLyrics(segments as WhisperSegment[], lyrics);
+        if (options.snapToBeat) {
+          snapToBeatGrid(lyrics, state.fineTune.bpmSegments);
+        }
+        // 6. infer separator (space/newline) times, like manual timing does
+        const refs = lyrics.getBeatRefs();
+        for (let bi = 0; bi < refs.length; bi++) {
+          inferSeparatorTimes(lyrics, bi);
+        }
+        onRequestRender?.();
+        onUndoRecord?.();
+        snack?.show(`自动打轴完成（${segments.length} 段）`);
+      } catch (err) {
+        snack?.show('自动打轴失败');
+        console.error('[auto timing]', err);
+      } finally {
+        onAutoTimingBusyChange?.(false);
+        onAutoTimingStageChange?.(null);
+        onAutoTimingProgressChange?.(-1);
+      }
+    },
+    [
+      state.audioFilePath,
+      snack,
+      lyrics,
+      onRequestRender,
+      onUndoRecord,
+      onAutoTimingBusyChange,
+      onAutoTimingProgressChange,
+      onAutoTimingStageChange,
+    ],
+  );
 
   // ── Beat operations ──
 
@@ -1654,8 +1523,55 @@ export default function TimingView({
           onSeek={handleCardCtxSeek}
         />
       )}
+      {autoTimingDialog && (
+        <AutoTimingDialog
+          languages={autoTimingDialog.languages}
+          onConfirm={handleAutoTimingConfirm}
+          onCancel={() => setAutoTimingDialog(null)}
+        />
+      )}
       {/* Bottom bar */}
-      <div className="tv-bottom">
+      <div className="tv-bottom" style={{ position: 'relative' }}>
+        {autoTimingBusy &&
+          autoTimingStage &&
+          (autoTimingProgress ?? -1) >= 0 && (
+            <div
+              className="tv-progress"
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: 0,
+                bottom: 0,
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                pointerEvents: 'none',
+              }}
+            >
+              <span className="tv-progress-label">
+                {autoTimingStage === 'separate' ? '分离中' : '对齐中'}
+              </span>
+              <div className="tv-progress-track">
+                <div
+                  className="tv-progress-fill"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(0, Math.round((autoTimingProgress ?? 0) * 100)),
+                    )}%`,
+                  }}
+                />
+              </div>
+              <span className="tv-progress-pct">
+                {Math.min(
+                  100,
+                  Math.max(0, Math.round((autoTimingProgress ?? 0) * 100)),
+                )}
+                %
+              </span>
+            </div>
+          )}
         {audioDuration > 0 && (
           <span className="tv-time">
             {fmtSec(Math.round(currentTime / 1000))}

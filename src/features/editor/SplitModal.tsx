@@ -48,7 +48,12 @@ export default function SplitModal({
       <div className="rem-modal">
         <div className="rem-header">
           <span className="rem-title">拆分: {word.reading}</span>
-          <button type="button" className="rem-close" onClick={onClose}>
+          <button
+            type="button"
+            className="rem-close"
+            onClick={onClose}
+            title="关闭"
+          >
             <span className="mdi mdi-close" />
           </button>
         </div>

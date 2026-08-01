@@ -89,7 +89,12 @@ export default function MetadataEditorModal({
       >
         <div className="rem-header">
           <span className="rem-title">元数据编辑</span>
-          <button type="button" className="rem-close" onClick={onClose}>
+          <button
+            type="button"
+            className="rem-close"
+            onClick={onClose}
+            title="关闭"
+          >
             <span className="mdi mdi-close" />
           </button>
         </div>

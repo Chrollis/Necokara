@@ -26,6 +26,8 @@ Necokara 是一款桌面端卡拉OK字幕视频制作工具，支持歌词编辑
 
 - **歌词导入/编辑** — 支持 TXT、LRC、NicoLRC、JSON 格式
 - **逐音节节拍打轴** — 精确到音节的 timing 编辑器
+- **自动打轴** — MDX 人声分离 + Whisper 语音识别强制对齐，多语言支持；可选分离缓存复用、伴奏残留清理、对齐到 32 分音符；全程无需 ffmpeg
+- **资源模型配置** — 自备模型目录设置，自动检测与校验（分离 / 对齐模型）
 - **项目文件** — 保存/打开 `.nekoproj` 项目，支持密码加密
 - **撤销/重做** — 全功能撤销管理器
 - **自动更新** — 通过 GitHub Releases 检测更新
@@ -84,6 +86,8 @@ Necokara is a desktop karaoke subtitle video maker with lyrics editing, beat tim
 
 - **Lyrics import / editing** — TXT, LRC, NicoLRC, JSON format support
 - **Per-syllable beat timing** — precise timing editor down to individual syllables
+- **Auto timing** — MDX vocal separation + Whisper forced alignment, multi-language; optional cached-vocals reuse, residue cleanup, and 32nd-note snapping; no ffmpeg required
+- **Resource model config** — bring-your-own model directory with auto-detection & validation (separate / align)
 - **Project files** — save/open `.nekoproj` projects with optional password encryption
 - **Undo / Redo** — full-featured undo manager
 - **Auto-update** — update detection via GitHub Releases

@@ -320,6 +320,7 @@ export default function TimingFineTuneView({
                 type="button"
                 className="rem-close"
                 onClick={() => setModal(null)}
+                title="关闭"
               >
                 <span className="mdi mdi-close" />
               </button>

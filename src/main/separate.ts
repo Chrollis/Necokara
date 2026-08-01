@@ -1,12 +1,12 @@
 /**
- * separate.ts — Vocal separation + onset detection via worker_threads.
+ * separate.ts — MDX-Net vocal separation (onnxruntime + worker_threads).
  *
- * Spawns a Worker thread running pleco-xa REPET-SIM + onset_strength.
- * Returns vocals, accompaniment, and onset times.
+ * Reads the model dir / ffmpeg path from the resource config and runs
+ * ffmpeg decode → separation in a Worker thread.
  */
-
 import * as path from 'path';
 import { Worker } from 'worker_threads';
+import { getResourceConfig, findSeparateModel } from './resources';
 
 function getWorkerPath(): string {
   const name = 'separate-worker';
@@ -16,25 +16,45 @@ function getWorkerPath(): string {
   return path.join(__dirname, `${name}.bundle.dev.js`);
 }
 
+export interface SeparateOptions {
+  computeInstru: boolean;
+  outputDir?: string | null;
+  exportBaseName?: string | null;
+}
+
 export interface SeparateResult {
-  vocals: Float32Array;
-  accompaniment: Float32Array;
-  onsets: number[];
+  vocalsPath: string;
+  exported: string[];
 }
 
 /**
- * Separate vocals and detect onsets via a Worker thread.
+ * Separate vocals from decoded PCM (renderer passes Float32Array channels).
+ * @param audioData channel data (L/R or mono), source sample rate
  */
 export async function separate(
-  audioData: Float32Array,
+  audioData: Float32Array[],
   sampleRate: number,
+  options: SeparateOptions,
   onProgress?: (p: number) => void,
 ): Promise<SeparateResult | null> {
+  const config = getResourceConfig();
+  const modelFilePath = findSeparateModel(config.modelDir);
+  if (!modelFilePath) {
+    throw new Error('未找到人声分离模型，请先在「资源配置」中配置模型目录');
+  }
+
   return new Promise((resolve, reject) => {
     const workerPath = getWorkerPath();
     const worker = new Worker(workerPath);
 
-    worker.postMessage({ audioData, sampleRate });
+    worker.postMessage({
+      audioData,
+      sampleRate,
+      modelFilePath,
+      computeInstru: options.computeInstru,
+      outputDir: options.outputDir ?? null,
+      exportBaseName: options.exportBaseName ?? null,
+    });
 
     worker.on('message', (result: any) => {
       if (result && typeof result.progress === 'number') {
@@ -48,9 +68,8 @@ export async function separate(
         reject(new Error(result.error));
       } else {
         resolve({
-          vocals: new Float32Array(result.vocals),
-          accompaniment: new Float32Array(result.accompaniment),
-          onsets: result.onsets as number[],
+          vocalsPath: String(result.vocalsPath ?? ''),
+          exported: (result.exported ?? []) as string[],
         });
       }
     });

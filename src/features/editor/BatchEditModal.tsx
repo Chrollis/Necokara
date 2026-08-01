@@ -37,7 +37,12 @@ export default function BatchEditModal({
       <div className="rem-modal">
         <div className="rem-header">
           <span className="rem-title">编辑选区 ({words.length} 个词)</span>
-          <button type="button" className="rem-close" onClick={onClose}>
+          <button
+            type="button"
+            className="rem-close"
+            onClick={onClose}
+            title="关闭"
+          >
             <span className="mdi mdi-close" />
           </button>
         </div>

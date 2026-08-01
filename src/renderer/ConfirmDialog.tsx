@@ -34,7 +34,12 @@ export default function ConfirmDialog({
       >
         <div className="rem-header">
           <span className="rem-title">{title}</span>
-          <button type="button" className="rem-close" onClick={onCancel}>
+          <button
+            type="button"
+            className="rem-close"
+            onClick={onCancel}
+            title="关闭"
+          >
             <span className="mdi mdi-close" />
           </button>
         </div>

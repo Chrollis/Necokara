@@ -94,12 +94,14 @@ export default function TimingToolbar({
           icon="skip-previous"
           onClick={() => onSeek(0)}
           disabled={!audioEngine}
+          title="跳转到开头"
         />
         <button
           type="button"
           className="shared-btn"
           disabled={!audioEngine}
           onClick={onTogglePlay}
+          title={isPlaying ? '停止' : '播放'}
         >
           <span className={`mdi ${isPlaying ? 'mdi-stop' : 'mdi-play'}`} />
         </button>
@@ -107,6 +109,7 @@ export default function TimingToolbar({
           icon="skip-next"
           onClick={() => onSeek(audioDuration)}
           disabled={!audioEngine}
+          title="跳转到结尾"
         />
         <ToolbarSep />
         <ToolbarButton
@@ -116,6 +119,7 @@ export default function TimingToolbar({
             onSeek(currentTimeRef.current - step);
           }}
           disabled={!audioEngine}
+          title="向前微调"
         />
         <ToolbarButton
           icon="chevron-double-right"
@@ -124,6 +128,7 @@ export default function TimingToolbar({
             onSeek(currentTimeRef.current + step);
           }}
           disabled={!audioEngine}
+          title="向后微调"
         />
         <ToolbarSep />
         <button

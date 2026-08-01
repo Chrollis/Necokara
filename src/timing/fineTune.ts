@@ -10,9 +10,11 @@ export function getBpmAtTime(
   if (bpmSegments.length === 0) return null;
 
   let bpm: number | null = null;
+  let latestStart = -1;
 
   bpmSegments.forEach((seg) => {
-    if (seg.start <= timeMs) {
+    if (seg.start <= timeMs && seg.start >= latestStart) {
+      latestStart = seg.start;
       bpm = seg.bpm > 0 ? seg.bpm : null;
     }
   });
@@ -25,13 +27,23 @@ export function snapToBpmGrid(
   bpmSegments: BpmSegment[],
   gridDenominator: number = 16,
 ): number {
-  const bpm = getBpmAtTime(bpmSegments, timeMs);
-  if (bpm === null) return timeMs;
+  // Find the applicable segment (latest start ≤ timeMs)
+  let best: BpmSegment | null = null;
+  for (const s of bpmSegments) {
+    if (s.start <= timeMs && (!best || s.start >= best.start)) {
+      best = s;
+    }
+  }
 
-  const gridInterval = 60000 / bpm / gridDenominator;
-  if (gridInterval <= 0) return timeMs;
+  if (!best || best.bpm <= 0) return timeMs;
+  const seg = best;
 
-  const snapped = Math.round(timeMs / gridInterval) * gridInterval;
+  const gridInterval = 60000 / seg.bpm / gridDenominator;
+  if (gridInterval <= 0 || !isFinite(gridInterval)) return timeMs;
+
+  // Snap relative to the segment's start time, matching waveform grid line alignment
+  const offset = (timeMs - seg.start) / gridInterval;
+  const snapped = seg.start + Math.round(offset) * gridInterval;
   return Math.max(0, snapped);
 }
 

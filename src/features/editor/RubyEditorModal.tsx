@@ -57,7 +57,12 @@ export default function RubyEditorModal({
       <div className="rem-modal">
         <div className="rem-header">
           <span className="rem-title">编辑注音: {word.reading}</span>
-          <button type="button" className="rem-close" onClick={onClose}>
+          <button
+            type="button"
+            className="rem-close"
+            onClick={onClose}
+            title="关闭"
+          >
             <span className="mdi mdi-close" />
           </button>
         </div>

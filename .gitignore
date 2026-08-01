@@ -2,8 +2,9 @@
 logs
 *.log
 
-#models
-*.onnx
+# Utils
+models/
+ffmpeg/
 
 # Docs
 docs/

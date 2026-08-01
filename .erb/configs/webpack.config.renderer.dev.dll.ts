@@ -14,6 +14,12 @@ checkNodeEnv('development');
 
 const dist = webpackPaths.dllPath;
 
+/**
+ * Native modules must NOT be bundled into the renderer DLL —
+ * webpack cannot parse .node binaries. Exclude them here.
+ */
+const dllExcludes = new Set(['@mdi/font', 'onnxruntime-node']);
+
 const configuration: webpack.Configuration = {
   context: webpackPaths.rootPath,
 
@@ -32,7 +38,7 @@ const configuration: webpack.Configuration = {
 
   entry: {
     renderer: Object.keys(dependencies || {}).filter(
-      (dep) => dep !== '@mdi/font',
+      (dep) => !dllExcludes.has(dep),
     ),
   },
 

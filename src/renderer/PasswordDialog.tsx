@@ -44,6 +44,7 @@ function PwInput({
       <button
         type="button"
         onClick={() => setShow((v) => !v)}
+        title={show ? '隐藏密码' : '显示密码'}
         style={{
           position: 'absolute',
           right: '4px',
@@ -143,7 +144,12 @@ export default function PasswordDialog({
         >
           <div className="rem-header">
             <span className="rem-title">{isSet ? '设置密码' : '更改密码'}</span>
-            <button type="button" className="rem-close" onClick={onCancel}>
+            <button
+              type="button"
+              className="rem-close"
+              onClick={onCancel}
+              title="关闭"
+            >
               <span className="mdi mdi-close" />
             </button>
           </div>
@@ -209,7 +215,12 @@ export default function PasswordDialog({
                   ? '清除密码'
                   : '设置密码'}
           </span>
-          <button type="button" className="rem-close" onClick={onCancel}>
+          <button
+            type="button"
+            className="rem-close"
+            onClick={onCancel}
+            title="关闭"
+          >
             <span className="mdi mdi-close" />
           </button>
         </div>

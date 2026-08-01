@@ -4,11 +4,19 @@
  */
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
+import * as fs from 'node:fs';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import IPC from '../shared/ipc';
 import { initLogger } from './logger';
 import { initUpdater, setMainWindow } from './updater';
+import {
+  registerResourcesHandlers,
+  getResourceConfig,
+  findSeparateModel,
+  findWhisperModel,
+} from './resources';
+import { WhisperTokenizer } from '../timing/whisper/tokenizer';
 
 app.setName('Necokara');
 
@@ -66,6 +74,13 @@ const createWindow = async () => {
       e.preventDefault();
       mainWindow?.webContents.send('window:requestClose');
     }
+  });
+
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:maximized-changed', true);
+  });
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:maximized-changed', false);
   });
 
   mainWindow.on('closed', () => {
@@ -196,85 +211,33 @@ function registerProjectHandlers() {
     return { filePath, dataUrl: `data:${contentType};base64,${base64}` };
   });
 
-  // ── Vocal separation via worker thread ──
-
-  /** Write a Float32Array as a 16-bit mono WAV file. */
-  function writeWav(filePath: string, samples: Float32Array, sr: number): void {
-    const fs = require('fs');
-    const numSamples = samples.length;
-    const buf = Buffer.alloc(44 + numSamples * 2);
-    const w = (off: number, v: number, size: number) => {
-      for (let i = 0; i < size; i++) buf[off + i] = (v >> (i * 8)) & 0xff;
-    };
-    const s = (off: number, str: string) => {
-      for (let i = 0; i < str.length; i++) buf[off + i] = str.charCodeAt(i);
-    };
-    s(0, 'RIFF');
-    w(4, 36 + numSamples * 2, 4);
-    s(8, 'WAVE');
-    s(12, 'fmt ');
-    w(16, 16, 4);
-    w(20, 1, 2);
-    w(22, 1, 2);
-    w(24, sr, 4);
-    w(28, sr * 2, 4);
-    w(32, 2, 2);
-    w(34, 16, 2);
-    s(36, 'data');
-    w(40, numSamples * 2, 4);
-    for (let i = 0; i < numSamples; i++) {
-      const sample = Math.max(-1, Math.min(1, samples[i]));
-      w(44 + i * 2, sample * 0x7fff, 2);
-    }
-    fs.writeFileSync(filePath, buf);
-  }
+  // ── Vocal separation via worker thread (MDX-Net) ──
 
   ipcMain.handle(
     IPC.SEPARATE_AUDIO,
     async (
       _event,
-      audioData: Float32Array,
+      audioData: Float32Array[],
       sampleRate: number,
-      audioFilePath?: string,
+      options: {
+        computeInstru: boolean;
+        outputDir?: string | null;
+        exportBaseName?: string | null;
+      },
     ) => {
       // @ts-expect-error dynamic import resolved by webpack
       const { separate } = await import('./separate');
       try {
-        const result = await separate(audioData, sampleRate, (p: number) => {
-          _event.sender.send(IPC.SEPARATE_PROGRESS, p);
-        });
+        const result = await separate(
+          audioData,
+          sampleRate,
+          options ?? { computeInstru: false },
+          (p: number) => {
+            _event.sender.send(IPC.SEPARATE_PROGRESS, p);
+          },
+        );
         if (!result) return { error: 'Separation returned null' };
-
-        // Save vocals/accompaniment alongside the audio file
-        if (audioFilePath) {
-          try {
-            const fs = require('fs');
-            const dir = path.dirname(audioFilePath);
-            const base = path.basename(
-              audioFilePath,
-              path.extname(audioFilePath),
-            );
-            const sr = 44100;
-            const vocalPath = path.join(dir, `${base}_vocal.wav`);
-            const instruPath = path.join(dir, `${base}_instru.wav`);
-            writeWav(vocalPath, result.vocals, sr);
-            writeWav(instruPath, result.accompaniment, sr);
-          } catch (e) {
-            // silent
-          }
-        }
-
-        return {
-          vocals: {
-            type: 'Float32Array' as const,
-            data: Array.from(result.vocals),
-          },
-          accompaniment: {
-            type: 'Float32Array' as const,
-            data: Array.from(result.accompaniment),
-          },
-          onsets: result.onsets,
-        };
+        return { vocalsPath: result.vocalsPath, exported: result.exported };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[main] separation error:', err);
@@ -282,6 +245,129 @@ function registerProjectHandlers() {
       }
     },
   );
+
+  // ── Whisper alignment via worker thread ──
+
+  ipcMain.handle(
+    IPC.WHISPER_ALIGN,
+    async (
+      _event,
+      vocalsPath: string,
+      languageToken: number,
+      lyricsPrompt?: string,
+      clean?: { enabled: boolean; threshold: number },
+    ) => {
+      // @ts-expect-error dynamic import resolved by webpack
+      const { alignVocal } = await import('./whisper');
+      try {
+        const result = await alignVocal(
+          vocalsPath,
+          languageToken,
+          lyricsPrompt,
+          clean,
+          (p: number) => {
+            _event.sender.send(IPC.WHISPER_ALIGN_PROGRESS, p);
+          },
+        );
+        if (!result) return { error: 'Alignment returned null' };
+        return { segments: result.segments };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[main] whisper alignment error:', err);
+        return { error: msg };
+      }
+    },
+  );
+
+  // ── Read an audio file into an ArrayBuffer (renderer decodes via decodeAudioData) ──
+
+  ipcMain.handle(
+    IPC.AUDIO_READ_BUFFER,
+    async (_event, audioFilePath: string) => {
+      try {
+        const data = await fs.promises.readFile(audioFilePath);
+        const buf = data.buffer.slice(
+          data.byteOffset,
+          data.byteOffset + data.byteLength,
+        );
+        return { data: buf };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { error: msg };
+      }
+    },
+  );
+
+  // ── Read a WAV header (sample rate + frame count) — used to validate a
+  //    cached `音频名-vocal.wav` against the source audio duration ──
+
+  ipcMain.handle(IPC.AUDIO_WAV_INFO, async (_event, filePath: string) => {
+    try {
+      const fd = await fs.promises.open(filePath, 'r');
+      const head = Buffer.alloc(44);
+      const { bytesRead } = await fd.read(head, 0, 44, 0);
+      await fd.close();
+      if (bytesRead < 44 || head.toString('ascii', 0, 4) !== 'RIFF') {
+        return { error: 'not a wav file' };
+      }
+      const numCh = head.readUInt16LE(22);
+      const sampleRate = head.readUInt32LE(24);
+      const bitsPerSample = head.readUInt16LE(34);
+      const audioFormat = head.readUInt16LE(20);
+      // walk chunks to find `data` size
+      let offset = 12;
+      let dataLen = 0;
+      while (offset + 8 <= bytesRead) {
+        const id = head.toString('ascii', offset, offset + 4);
+        const sz = head.readUInt32LE(offset + 4);
+        if (id === 'data') {
+          dataLen = sz;
+          break;
+        }
+        offset += 8 + sz;
+      }
+      const bytesPerSample = bitsPerSample / 8;
+      const frames = Math.floor(dataLen / Math.max(1, numCh * bytesPerSample));
+      if (audioFormat !== 1 && audioFormat !== 3) {
+        return { error: `unsupported wav format ${audioFormat}` };
+      }
+      if (!sampleRate || frames <= 0) return { error: 'invalid wav' };
+      return { sampleRate, frames };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { error: msg };
+    }
+  });
+
+  // ── Auto-timing preflight check (models + whisper language support) ──
+
+  ipcMain.handle(IPC.AUTO_TIMING_CHECK, () => {
+    const config = getResourceConfig();
+    const separateModelOk = !!findSeparateModel(config.modelDir);
+    const whisperDir = findWhisperModel(config.modelDir);
+    let whisperModelOk = !!whisperDir;
+    let whisperLanguages: Array<{ code: string; id: number }> = [];
+    if (whisperDir) {
+      try {
+        const vocabJson = JSON.parse(
+          fs.readFileSync(path.join(whisperDir, 'vocab.json'), 'utf-8'),
+        );
+        const tokenizerJson = JSON.parse(
+          fs.readFileSync(path.join(whisperDir, 'tokenizer.json'), 'utf-8'),
+        );
+        const tokenizer = new WhisperTokenizer(vocabJson, tokenizerJson);
+        whisperLanguages = tokenizer.languageTokens();
+        whisperModelOk = whisperLanguages.length > 0;
+      } catch {
+        whisperModelOk = false;
+      }
+    }
+    return {
+      separateModelOk,
+      whisperModelOk,
+      whisperLanguages,
+    };
+  });
 
   // ── BPM detection via worker ──
 
@@ -401,6 +487,7 @@ app
     registerFsHandlers();
     registerProjectHandlers();
     registerWindowHandlers();
+    registerResourcesHandlers();
     createWindow();
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
