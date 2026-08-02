@@ -13,21 +13,7 @@ import { isSeparatorWord } from '../../editor/word';
 import { setSyllableTime, type Syllable } from '../../editor/syllable';
 import { createTime } from '../../editor/time';
 import type { WhisperSegment } from './transcribe';
-
-/**
- * Normalize one character for matching: Katakana → Hiragana (1:1 Unicode
- * shift) so katakana loan-words in the whisper transcript can match the
- * hiragana reading in the lyrics (e.g. キャンバス → きゃんばす). Kanji is
- * left untouched — hiragana fragments still give anchors, and the block
- * fallback bridges the rest.
- */
-function toHiragana(ch: string): string {
-  const c = ch.charCodeAt(0);
-  if (c >= 0x30a1 && c <= 0x30f6) {
-    return String.fromCharCode(c - 0x60);
-  }
-  return ch;
-}
+import { toHiragana } from './attention';
 
 /**
  * Edit-distance DP with backtracking. Returns aToB[i] = index in `b` aligned
@@ -91,8 +77,50 @@ export function alignSegmentsToLyrics(
     for (const ch of seg.text) bChars.push(toHiragana(ch));
   });
 
+  // per-char absolute time (seconds), from word-level timestamps when the
+  // model exposed them, otherwise uniform within the owning segment.
+  const charTimes: number[] = new Array(bChars.length);
+  const fillUniform = (): void => {
+    for (let s = 0; s < segments.length; s++) {
+      const seg = segments[s];
+      const len = seg.text.length;
+      for (let k = 0; k < len; k++) {
+        const frac = (k + 0.5) / len;
+        charTimes[segCharStart[s] + k] =
+          seg.start + frac * (seg.end - seg.start);
+      }
+    }
+  };
+  fillUniform();
+  // overlay word-level times: each word's chars are spread uniformly inside
+  // [word.start, word.end], which beats uniform segment interpolation.
+  for (let s = 0; s < segments.length; s++) {
+    const seg = segments[s];
+    if (!seg.wordTimes || seg.wordTimes.length === 0) continue;
+    const base = segCharStart[s];
+    const len = seg.text.length;
+    // collect the non-whitespace char slots of this segment (word texts are
+    // trimmed; whitespace in seg.text comes from `Ġ` BPE tokens)
+    const slots: number[] = [];
+    for (let k = 0; k < len; k++) {
+      if (!/\s/.test(seg.text[k])) slots.push(base + k);
+    }
+    let si = 0; // next slot index
+    for (const w of seg.wordTimes) {
+      const chars = [...w.text].filter((c) => !/\s/.test(c));
+      if (chars.length === 0) continue;
+      if (si + chars.length > slots.length) break; // transcript mismatch; stop
+      for (let k = 0; k < chars.length; k++) {
+        const frac = chars.length <= 1 ? 0.5 : (k + 0.5) / chars.length;
+        charTimes[slots[si + k]] = w.start + frac * (w.end - w.start);
+      }
+      si += chars.length;
+    }
+  }
+
   const timeOfB = (bIdx: number): number => {
-    // find owning segment via binary/linear scan (segments are few)
+    if (bIdx >= 0 && bIdx < charTimes.length) return charTimes[bIdx];
+    // fallback: owning segment via binary/linear scan (segments are few)
     let segIdx = -1;
     for (let s = 0; s < segments.length; s++) {
       if (bIdx < segCharStart[s] + segments[s].text.length) {

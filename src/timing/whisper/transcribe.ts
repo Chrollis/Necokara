@@ -8,6 +8,7 @@
  */
 import { decodeWindow } from './decode';
 import type { WhisperTokenizer } from './tokenizer';
+import type { WordTime } from './wordtimestamps';
 
 const SAMPLE_RATE = 16000;
 const HOP_LENGTH = 160;
@@ -22,13 +23,18 @@ export interface WhisperSegment {
   end: number;
   text: string;
   tokens: number[];
+  /** per-token cross-attention [nTokens, nFrames], for word-level timestamps */
+  crossAttn?: Float32Array | null;
+  /** word-level timestamps computed from cross-attention, when available */
+  wordTimes?: WordTime[] | null;
+  /** absolute time of this segment's 30s window origin (seconds); used to
+   * recompute wordTimes after start/end trimming */
+  windowOffset?: number;
 }
 
 export interface TranscribeOptions {
   languageToken: number;
   suppressTokens: number[];
-  /** lyric furigana prompt tokens, injected every window */
-  lyricsPromptTokens?: number[];
   noSpeechThreshold?: number; // default 0.6
   logprobThreshold?: number; // default -1.0
   onProgress?: (p: number) => void;
@@ -40,7 +46,9 @@ export interface TranscribeOptions {
  */
 export async function transcribe(
   encoderFn: (melSeg: Float32Array) => Promise<unknown>,
-  decoderFn: (inputIds: number[]) => Promise<Float32Array>,
+  decoderFn: (
+    inputIds: number[],
+  ) => Promise<{ logits: Float32Array; attn?: Float32Array | null }>,
   mel: Float32Array,
   tokenizer: WhisperTokenizer,
   opts: TranscribeOptions,
@@ -86,6 +94,7 @@ export async function transcribe(
       languageToken: opts.languageToken,
       suppressTokens: opts.suppressTokens,
       promptTokens: allTokens,
+      needCrossAttn: true,
     });
     const tokens = result.tokens;
 
@@ -113,6 +122,12 @@ export async function transcribe(
       if (tsMask[i] && tsMask[i + 1]) consecutive.push(i + 1);
     }
 
+    // crossAttn is packed [nTokens, w] row-major; derive row width so subarray
+    // slices whole rows instead of raw elements (rows align with result.tokens).
+    const caW =
+      result.crossAttn && result.tokens.length > 0
+        ? result.crossAttn.length / result.tokens.length
+        : 0;
     if (consecutive.length > 0) {
       const slices = consecutive.slice();
       if (singleTsEnding) slices.push(tokens.length);
@@ -126,6 +141,11 @@ export async function transcribe(
           end: timeOffset + endPos * TIME_PRECISION,
           text: decodeText(sliced),
           tokens: sliced,
+          windowOffset: timeOffset,
+          crossAttn:
+            result.crossAttn && caW > 0
+              ? result.crossAttn.subarray(last * caW, s * caW)
+              : null,
         });
         last = s;
       }
@@ -150,6 +170,8 @@ export async function transcribe(
         end: timeOffset + duration,
         text: decodeText(tokens),
         tokens,
+        windowOffset: timeOffset,
+        crossAttn: result.crossAttn ?? null,
       });
       advance(seek + segFrames);
     }
@@ -158,7 +180,9 @@ export async function transcribe(
     const kept = currentSegments.filter(
       (s) => s.end > s.start && s.text.trim().length > 0,
     );
-    for (const s of kept) allTokens.push(...s.tokens);
+    for (const s of kept) {
+      allTokens.push(...s.tokens);
+    }
     allSegments.push(...kept);
 
     opts.onProgress?.(

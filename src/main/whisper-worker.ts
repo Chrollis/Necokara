@@ -9,6 +9,7 @@ import { parentPort } from 'worker_threads';
 import * as fs from 'fs';
 import { loadWhisperModel, transcribeAudio } from '../timing/whisper/index';
 import { cleanVocal, trimSegmentSilence } from '../timing/whisper/clean';
+import { segmentWordTimes } from '../timing/whisper/wordtimestamps';
 
 /** Parse a RIFF WAV file (float32 or PCM16). */
 function readWav(filePath: string): {
@@ -114,19 +115,21 @@ parentPort?.on(
       });
 
       const model = await loadWhisperModel(modelDir);
-      // lyric furigana prompt: keep the model aligned to the user's lyrics
-      const lyricsPromptTokens =
-        lyricsPrompt && lyricsPrompt.trim().length > 0
-          ? model.tokenizer.encode(` ${lyricsPrompt.trim()}`)
-          : undefined;
       const segments = await transcribeAudio(model, cleaned, {
         languageToken,
-        lyricsPromptTokens,
         onProgress: (p) => parentPort?.postMessage({ progress: p }),
       });
       // trim leading silence off each segment (whisper starts first segment at
       // window origin even when there is instrumental residue before the voice)
       const trimmed = trimSegmentSilence(segments, cleaned);
+      // recompute word-level timestamps AFTER trimming so they use the final
+      // seg.start/end (the trim shifts seg.start but not the window origin)
+      const tsBegin = model.tokenizer.specials.timestampBegin;
+      for (const s of trimmed) {
+        s.wordTimes = segmentWordTimes(s, s.windowOffset ?? 0, tsBegin, (t) =>
+          model.tokenizer.decode(t),
+        );
+      }
 
       parentPort?.postMessage({ segments: trimmed });
     } catch (err) {

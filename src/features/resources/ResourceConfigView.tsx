@@ -5,9 +5,20 @@ import type {
   ResourceConfig,
 } from '../../shared/ipc';
 import ResourceConfigToolbar from './ResourceConfigToolbar';
+import type { UpdateStatus } from '../../renderer/hooks/useUpdater';
+import UpdateButton from '../../shared/components/UpdateButton';
+import { APP_VERSION } from '../../project/project';
 import './resource-config.css';
 
-export default function ResourceConfigView() {
+interface ResourceConfigViewProps {
+  updateStatus: UpdateStatus;
+  onInstallUpdate: () => void;
+}
+
+export default function ResourceConfigView({
+  updateStatus,
+  onInstallUpdate,
+}: ResourceConfigViewProps) {
   const [config, setConfig] = useState<ResourceConfig>({
     modelDir: '',
     ffmpegPath: '',
@@ -218,7 +229,7 @@ export default function ResourceConfigView() {
             <section className="rc-card">
               <header className="rc-card-header">
                 <span className="rc-card-title">
-                  <span className="mdi mdi-file-cog-outline" /> ffmpeg 路径
+                  <span className="mdi mdi-file-cog-outline" /> FFmpeg路径
                 </span>
                 <span className={`rc-badge ${ffmpegBadge.cls}`}>
                   {ffmpegBadge.text}
@@ -283,6 +294,11 @@ export default function ResourceConfigView() {
             </section>
           </div>
         )}
+      </div>
+      {/* bottom bar, same as the project view */}
+      <div className="pv-bottom">
+        <UpdateButton status={updateStatus} onInstall={onInstallUpdate} />
+        <span style={{ marginLeft: 'auto' }}>ver: {APP_VERSION}</span>
       </div>
     </div>
   );

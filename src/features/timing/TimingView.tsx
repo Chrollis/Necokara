@@ -24,7 +24,6 @@ import {
   type SeparateResult,
 } from '../../timing/audio-analysis';
 import { alignSegmentsToLyrics } from '../../timing/whisper/align';
-import type { WhisperSegment } from '../../timing/whisper/transcribe';
 import AutoTimingDialog from './AutoTimingDialog';
 import type { AutoTimingOptions } from './AutoTimingDialog';
 import { setSyllableTime, unsetSyllableTime } from '../../editor/syllable';
@@ -536,7 +535,12 @@ export default function TimingView({
         onAutoTimingProgressChange?.(0);
         onAutoTimingStageChange?.('align');
         snack?.show('正在 whisper 对齐…');
-        const lyricsPrompt = lyrics.words.map((w) => w.reading).join('');
+        // lyric prompt = syllable READINGS (furigana); currently ignored by the
+        // worker (prompt injection disabled after the cursor experiment), kept
+        // for future reuse
+        const lyricsPrompt = lyrics.words
+          .map((w) => w.syllables.map((s) => s.reading).join(''))
+          .join('');
         const clean =
           options.cleanVocal !== false
             ? { enabled: true, threshold: options.cleanThreshold ?? 12 }
@@ -554,7 +558,7 @@ export default function TimingView({
         }
 
         // 5. apply
-        alignSegmentsToLyrics(segments as WhisperSegment[], lyrics);
+        alignSegmentsToLyrics(segments, lyrics);
         if (options.snapToBeat) {
           snapToBeatGrid(lyrics, state.fineTune.bpmSegments);
         }

@@ -19,11 +19,12 @@ export interface DecodeOptions {
   suppressTokens: number[];
   /** conditioning prompt tokens from the previous window (without <|startofprev|>) */
   promptTokens?: number[];
-  /** lyric furigana prompt tokens (kept near the sot sequence; sliced with conditioning) */
-  initialPromptTokens?: number[];
   maxInitialTimestampIndex?: number; // default round(1.0 / TIME_PRECISION) = 50
   sampleLen?: number; // default 112 (n_ctx // 2)
   temperature?: number; // default 0 (greedy)
+  /** if true, run one extra final decoder pass over the complete token sequence
+   * and return per-token cross-attention [nTokens, nFrames] for word timestamps */
+  needCrossAttn?: boolean;
 }
 
 export interface DecodeResult {
@@ -33,6 +34,9 @@ export interface DecodeResult {
   avgLogprob: number;
   sumLogprob: number;
   temperature: number;
+  /** per-token cross-attention to encoder frames [nTokens, nFrames], when the
+   * model exposes it (word-level timestamps); null otherwise */
+  crossAttn?: Float32Array | null;
 }
 
 const NEG = -1e30;
@@ -93,11 +97,18 @@ function applyTimestampRules(
 }
 
 /**
- * Decode one window. `decoderFn(inputIds)` must return the full logits tensor
- * as Float32Array shaped [L, V] (row-major).
+ * Decode one window. `decoderFn(inputIds)` must return
+ * `{ logits: Float32Array[L, V], attn?: Float32Array[L, nFrames] }` where
+ * `attn` is the cross-attention of EVERY token row to encoder frames, packed
+ * row-major (null if the model does not expose it).
+ *
+ * When `opts.needCrossAttn` is set, one extra final pass over the complete
+ * token sequence is made so the returned `crossAttn` aligns with `tokens`.
  */
 export async function decodeWindow(
-  decoderFn: (inputIds: number[]) => Promise<Float32Array>,
+  decoderFn: (
+    inputIds: number[],
+  ) => Promise<{ logits: Float32Array; attn?: Float32Array | null }>,
   tokenizer: WhisperTokenizer,
   opts: DecodeOptions,
 ): Promise<DecodeResult> {
@@ -111,12 +122,9 @@ export async function decodeWindow(
 
   const sotSeq = tokenizer.sotSequence(opts.languageToken, opts.task);
   const maxPrompt = Math.floor(448 / 2 - 1) - sotSeq.length;
-  // lyric prompt first (kept at the tail so it survives truncation), then
-  // previous-window conditioning at the head (older conditioning is dropped first)
-  const merged = [
-    ...(opts.promptTokens ?? []),
-    ...(opts.initialPromptTokens ?? []),
-  ];
+  // previous-window conditioning at the head; older conditioning is dropped
+  // first when it exceeds the context budget
+  const merged = opts.promptTokens ?? [];
   let initial: number[];
   if (merged.length > 0) {
     initial = [sp.sotPrev, ...merged.slice(-maxPrompt), ...sotSeq];
@@ -132,7 +140,7 @@ export async function decodeWindow(
   let noSpeechProb = NaN;
 
   for (let step = 0; step < sampleLen; step++) {
-    const logits = await decoderFn(tokens); // Float32Array [L, V]
+    const { logits } = await decoderFn(tokens); // logits [L, V]
     const L = tokens.length;
     const V = logits.length / L;
     // no-speech probability: softmax over logits at the sot position
@@ -194,11 +202,29 @@ export async function decodeWindow(
   }
 
   const generated = tokens.length - sampleBegin;
+  // one extra final pass over the complete sequence -> all token rows' attention,
+  // then keep only the generated (post-prompt) rows so crossAttn aligns with tokens.
+  let crossAttn: Float32Array | null = null;
+  if (opts.needCrossAttn && generated > 0) {
+    const { attn } = await decoderFn(tokens);
+    if (attn && attn.length >= tokens.length) {
+      const T = tokens.length;
+      const w = attn.length / T;
+      crossAttn = new Float32Array(generated * w);
+      for (let i = 0; i < generated; i++) {
+        crossAttn.set(
+          attn.subarray((sampleBegin + i) * w, (sampleBegin + i + 1) * w),
+          i * w,
+        );
+      }
+    }
+  }
   return {
     tokens: tokens.slice(sampleBegin),
     noSpeechProb,
     avgLogprob: generated > 0 ? sumLogprob / generated : sumLogprob,
     sumLogprob,
     temperature,
+    crossAttn,
   };
 }

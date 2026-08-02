@@ -4,6 +4,7 @@
  * BPM detection runs in the main process via IPC (pleco worker).
  */
 import type { BpmSegment } from './types';
+import type { WhisperSegment } from './whisper/transcribe';
 import IPC from '../shared/ipc';
 
 export interface RhythmResult {
@@ -26,13 +27,6 @@ export async function detectRhythm(
   if ('error' in result)
     throw new Error(`BPM detection failed: ${result.error}`);
   return result as RhythmResult;
-}
-
-export interface AlignSegment {
-  start: number;
-  end: number;
-  text: string;
-  tokens: number[];
 }
 
 export interface SeparateAudioOptions {
@@ -87,7 +81,7 @@ export async function separateVocals(
  * Whisper-align separated vocals in the main process (worker thread).
  * @param lyricsPrompt lyric furigana text to bias transcription
  * @param clean optional noise-gate settings for instrumental residue
- * @returns timestamped segments
+ * @returns timestamped segments (with cross-attention word timestamps)
  */
 export async function alignVocals(
   vocalsPath: string,
@@ -95,7 +89,7 @@ export async function alignVocals(
   lyricsPrompt?: string,
   clean?: { enabled: boolean; threshold: number },
   onProgress?: (p: number) => void,
-): Promise<AlignSegment[]> {
+): Promise<WhisperSegment[]> {
   let unsub: (() => void) | undefined;
   if (onProgress) {
     unsub = window.electron.ipcRenderer.on(
@@ -111,7 +105,7 @@ export async function alignVocals(
     languageToken,
     lyricsPrompt ?? undefined,
     clean,
-  )) as { segments: AlignSegment[] } | { error: string } | null;
+  )) as { segments: WhisperSegment[] } | { error: string } | null;
   unsub?.();
   if (!res) throw new Error('Alignment returned null');
   if ('error' in res) throw new Error(`Alignment failed: ${res.error}`);

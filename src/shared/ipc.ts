@@ -70,6 +70,15 @@ export interface IpcChannelMap {
             end: number;
             text: string;
             tokens: number[];
+            /** per-token cross-attention (word timestamps), when the model
+             * exposes it; may be null/undefined over IPC for old models */
+            crossAttn?: Float32Array | number[] | null;
+            wordTimes?: Array<{
+              start: number;
+              end: number;
+              text: string;
+            }> | null;
+            windowOffset?: number;
           }>;
         }
       | { error: string }

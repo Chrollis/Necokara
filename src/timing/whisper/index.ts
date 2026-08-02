@@ -1,6 +1,5 @@
 /**
- * whisper/index.ts — entry point: load the Whisper ONNX model and run
- * transcribe + align against user lyrics.
+ * whisper/index.ts — entry point: load the Whisper ONNX model and transcribe.
  *
  * Model layout (models/whisper/):
  *   onnx/encoder_model.onnx, onnx/decoder_model.onnx,
@@ -11,18 +10,24 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import type { Lyrics } from '../../editor/lyrics';
 import { logMelSpectrogram } from './mel';
 import { WhisperTokenizer } from './tokenizer';
 import { transcribe, type WhisperSegment } from './transcribe';
-import { alignSegmentsToLyrics } from './align';
+import { averageCrossAttention } from './attention';
 
 const SAMPLE_RATE = 16000;
 const CHUNK_SAMPLES = 30 * SAMPLE_RATE; // 480000
 
+/** Minimal onnxruntime InferenceSession surface used by the worker. */
+export interface OnnxSession {
+  run(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  outputNames: string[];
+  outputMetadata: Array<{ shape?: number[] }>;
+}
+
 export interface WhisperModel {
-  encoderSession: any;
-  decoderSession: any;
+  encoderSession: OnnxSession;
+  decoderSession: OnnxSession;
   tokenizer: WhisperTokenizer;
   languageToken: number;
   suppressTokens: number[];
@@ -32,17 +37,9 @@ export interface WhisperModel {
 export interface WhisperAlignOptions {
   noSpeechThreshold?: number;
   logprobThreshold?: number;
-  globalOffsetMs?: number;
   /** language token id (e.g. sp.ja); defaults to the model's configured language */
   languageToken?: number;
-  /** lyric furigana prompt tokens (encoded by the caller), injected every window */
-  lyricsPromptTokens?: number[];
   onProgress?: (p: number) => void;
-}
-
-export interface WhisperAlignResult {
-  segments: WhisperSegment[];
-  lyrics: Lyrics;
 }
 
 function loadOnnx(): any {
@@ -96,7 +93,7 @@ export async function loadWhisperModel(
 
   // vocab size from decoder output
   const outMeta = decoderSession.outputMetadata[0];
-  const dims = outMeta.shape as number[];
+  const dims = outMeta?.shape ?? [];
   const vocabSize = dims[dims.length - 1] ?? 51865;
 
   return {
@@ -124,7 +121,7 @@ export async function transcribeAudio(
   // full mel with 30s trailing silence (whisper padding)
   const mel = logMelSpectrogram(audio, 80, CHUNK_SAMPLES);
 
-  let currentHidden: any = null;
+  let currentHidden: unknown = null;
   const encoderFn = async (melSeg: Float32Array): Promise<unknown> => {
     const out = await encoderSession.run({
       input_features: new ort.Tensor('float32', melSeg, [1, 80, 3000]),
@@ -132,7 +129,9 @@ export async function transcribeAudio(
     currentHidden = out[encoderSession.outputNames[0]];
     return currentHidden;
   };
-  const decoderFn = async (inputIds: number[]): Promise<Float32Array> => {
+  const decoderFn = async (
+    inputIds: number[],
+  ): Promise<{ logits: Float32Array; attn?: Float32Array | null }> => {
     const out = await decoderSession.run({
       input_ids: new ort.Tensor(
         'int64',
@@ -141,30 +140,27 @@ export async function transcribeAudio(
       ),
       encoder_hidden_states: currentHidden,
     });
-    return out[decoderSession.outputNames[0]].data as Float32Array;
+    const logits = (
+      out[decoderSession.outputNames[0]] as { data: Float32Array }
+    ).data;
+    // cross-attention for ALL token rows [L, Tenc], averaged over the official
+    // alignment heads only (see attention.ts).
+    const crossAttnNames: string[] = decoderSession.outputNames.filter((n) =>
+      n.startsWith('cross_attentions.'),
+    );
+    const attn = averageCrossAttention(
+      out as Record<string, { data: ArrayLike<number>; dims?: number[] }>,
+      crossAttnNames,
+      inputIds.length,
+    );
+    return { logits, attn };
   };
 
   return transcribe(encoderFn, decoderFn, mel, tokenizer, {
     languageToken: opts.languageToken ?? model.languageToken,
     suppressTokens: model.suppressTokens,
-    lyricsPromptTokens: opts.lyricsPromptTokens,
     noSpeechThreshold: opts.noSpeechThreshold,
     logprobThreshold: opts.logprobThreshold,
     onProgress: opts.onProgress,
   });
-}
-
-/**
- * Run the full pipeline: audio (16k mono f32) -> mel -> transcribe -> align.
- * Returns the aligned lyrics (syllable times set) plus raw segments.
- */
-export async function transcribeAndAlign(
-  model: WhisperModel,
-  audio: Float32Array,
-  lyrics: Lyrics,
-  opts: WhisperAlignOptions = {},
-): Promise<WhisperAlignResult> {
-  const segments = await transcribeAudio(model, audio, opts);
-  alignSegmentsToLyrics(segments, lyrics, opts.globalOffsetMs ?? 0);
-  return { segments, lyrics };
 }

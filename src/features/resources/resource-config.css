@@ -21,17 +21,20 @@
 }
 
 .rc-cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-lg);
-  max-width: 720px;
+  width: 100%;
 }
 
 .rc-card {
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-sm);
   background: var(--canvas);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   padding: var(--space-lg);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .rc-card-header {
@@ -79,6 +82,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rc-row .shared-btn {
+  flex-shrink: 0;
 }
 
 .rc-input {

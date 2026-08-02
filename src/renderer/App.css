@@ -101,7 +101,22 @@ body {
   display: flex;
   align-items: center;
   gap: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+  min-width: 0;
+  flex: 0 1 auto;
+  /* pan tabs by dragging; hide the scrollbar entirely (no scrollbar UI) */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.topbar-tabs-dragging {
+  cursor: grabbing;
+}
+
+.topbar-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .topbar-tab {
@@ -118,6 +133,8 @@ body {
   border-bottom: 2px solid transparent;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .topbar-tab:hover:not(:disabled) {

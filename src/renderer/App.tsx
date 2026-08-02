@@ -229,7 +229,10 @@ export default function App() {
             onLyricsChange={handleLyricsChange}
           />
         ) : currentView === 'resources' ? (
-          <ResourceConfigView />
+          <ResourceConfigView
+            updateStatus={updateStatus}
+            onInstallUpdate={installUpdate}
+          />
         ) : (
           <TimingView
             key={projectKey}
