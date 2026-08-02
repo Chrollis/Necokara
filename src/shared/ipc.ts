@@ -60,7 +60,6 @@ export interface IpcChannelMap {
     args: [
       vocalsPath: string,
       languageToken: number,
-      lyricsPrompt?: string,
       clean?: { enabled: boolean; threshold: number },
     ];
     result:

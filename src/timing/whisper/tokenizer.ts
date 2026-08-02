@@ -238,9 +238,4 @@ export class WhisperTokenizer {
     }
     return Buffer.from(bytes).toString('utf8');
   }
-
-  /** id -> token string (for debugging / timestamp resolution). */
-  tokenString(id: number): string | undefined {
-    return this.idToTok.get(id);
-  }
 }

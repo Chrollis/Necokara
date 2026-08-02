@@ -73,17 +73,3 @@ export function toHiragana(ch: string): string {
   if (c >= 0x30a1 && c <= 0x30f6) return String.fromCharCode(c - 0x60);
   return ch;
 }
-
-/**
- * Normalize a string for matching: katakana→hiragana, whitespace/newlines
- * stripped. Used so whisper's (possibly katakana/space-token) transcript can be
- * matched against the user's hiragana syllable readings.
- */
-export function normalizeForMatch(s: string): string {
-  let out = '';
-  for (const ch of s) {
-    const h = toHiragana(ch);
-    if (h !== ' ' && h !== '\n') out += h;
-  }
-  return out;
-}

@@ -32,7 +32,6 @@ export interface DecodeResult {
   tokens: number[];
   noSpeechProb: number;
   avgLogprob: number;
-  sumLogprob: number;
   temperature: number;
   /** per-token cross-attention to encoder frames [nTokens, nFrames], when the
    * model exposes it (word-level timestamps); null otherwise */
@@ -223,7 +222,6 @@ export async function decodeWindow(
     tokens: tokens.slice(sampleBegin),
     noSpeechProb,
     avgLogprob: generated > 0 ? sumLogprob / generated : sumLogprob,
-    sumLogprob,
     temperature,
     crossAttn,
   };

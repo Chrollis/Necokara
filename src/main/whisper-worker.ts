@@ -83,11 +83,10 @@ parentPort?.on(
     vocalsPath: string;
     modelDir: string;
     languageToken: number;
-    lyricsPrompt?: string;
     clean?: { enabled: boolean; threshold: number };
   }) => {
     try {
-      const { vocalsPath, modelDir, languageToken, lyricsPrompt, clean } = msg;
+      const { vocalsPath, modelDir, languageToken, clean } = msg;
       if (!vocalsPath || !modelDir) {
         parentPort?.postMessage({ error: '缺少 vocals / 模型目录配置' });
         return;

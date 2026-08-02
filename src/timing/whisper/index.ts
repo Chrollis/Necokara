@@ -22,7 +22,6 @@ const CHUNK_SAMPLES = 30 * SAMPLE_RATE; // 480000
 export interface OnnxSession {
   run(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
   outputNames: string[];
-  outputMetadata: Array<{ shape?: number[] }>;
 }
 
 export interface WhisperModel {
@@ -31,7 +30,6 @@ export interface WhisperModel {
   tokenizer: WhisperTokenizer;
   languageToken: number;
   suppressTokens: number[];
-  vocabSize: number;
 }
 
 export interface WhisperAlignOptions {
@@ -91,18 +89,12 @@ export async function loadWhisperModel(
     ]),
   );
 
-  // vocab size from decoder output
-  const outMeta = decoderSession.outputMetadata[0];
-  const dims = outMeta?.shape ?? [];
-  const vocabSize = dims[dims.length - 1] ?? 51865;
-
   return {
     encoderSession,
     decoderSession,
     tokenizer,
     languageToken: sp.ja,
     suppressTokens,
-    vocabSize,
   };
 }
 

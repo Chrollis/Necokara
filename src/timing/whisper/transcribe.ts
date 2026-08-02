@@ -6,7 +6,7 @@
  *   - encoderFn(melSeg): run the encoder onnx on one [80,3000] mel window -> hidden states
  *   - decoderFn(inputIds): run the decoder onnx -> full logits [L, V]
  */
-import { decodeWindow } from './decode';
+import { decodeWindow, TIME_PRECISION } from './decode';
 import type { WhisperTokenizer } from './tokenizer';
 import type { WordTime } from './wordtimestamps';
 
@@ -14,7 +14,6 @@ const SAMPLE_RATE = 16000;
 const HOP_LENGTH = 160;
 const N_FRAMES = 3000; // 30s of mel frames
 const N_MELS = 80;
-const TIME_PRECISION = 0.02;
 const FRAME_DURATION = HOP_LENGTH / SAMPLE_RATE; // 0.01s per mel frame
 const INPUT_STRIDE = N_FRAMES / 1500; // 2 mel frames per output token
 
@@ -109,7 +108,6 @@ export async function transcribe(
       continue;
     }
 
-    const prevSeek = seek;
     const currentSegments: WhisperSegment[] = [];
 
     const tsMask = tokens.map((t) => t >= tsBegin);
@@ -190,7 +188,6 @@ export async function transcribe(
     );
     windowCount += 1;
     if (windowCount > maxWindows) break;
-    void prevSeek;
   }
 
   return allSegments;

@@ -25,13 +25,11 @@ export interface AlignResult {
  * Transcribe separated vocals to timestamped segments via a Worker thread.
  * @param vocalsPath path to the separated vocals wav
  * @param languageToken whisper language token id (e.g. <|ja|>)
- * @param lyricsPrompt lyric furigana text to bias transcription
  * @param clean optional noise-gate settings for instrumental residue
  */
 export async function alignVocal(
   vocalsPath: string,
   languageToken: number,
-  lyricsPrompt?: string,
   clean?: { enabled: boolean; threshold: number },
   onProgress?: (p: number) => void,
 ): Promise<AlignResult | null> {
@@ -51,7 +49,6 @@ export async function alignVocal(
       vocalsPath,
       modelDir,
       languageToken,
-      lyricsPrompt: lyricsPrompt ?? undefined,
       clean,
     });
 

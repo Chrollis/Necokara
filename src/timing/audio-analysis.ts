@@ -79,14 +79,12 @@ export async function separateVocals(
 
 /**
  * Whisper-align separated vocals in the main process (worker thread).
- * @param lyricsPrompt lyric furigana text to bias transcription
  * @param clean optional noise-gate settings for instrumental residue
  * @returns timestamped segments (with cross-attention word timestamps)
  */
 export async function alignVocals(
   vocalsPath: string,
   languageToken: number,
-  lyricsPrompt?: string,
   clean?: { enabled: boolean; threshold: number },
   onProgress?: (p: number) => void,
 ): Promise<WhisperSegment[]> {
@@ -103,7 +101,6 @@ export async function alignVocals(
     IPC.WHISPER_ALIGN,
     vocalsPath,
     languageToken,
-    lyricsPrompt ?? undefined,
     clean,
   )) as { segments: WhisperSegment[] } | { error: string } | null;
   unsub?.();

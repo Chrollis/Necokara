@@ -535,12 +535,6 @@ export default function TimingView({
         onAutoTimingProgressChange?.(0);
         onAutoTimingStageChange?.('align');
         snack?.show('正在 whisper 对齐…');
-        // lyric prompt = syllable READINGS (furigana); currently ignored by the
-        // worker (prompt injection disabled after the cursor experiment), kept
-        // for future reuse
-        const lyricsPrompt = lyrics.words
-          .map((w) => w.syllables.map((s) => s.reading).join(''))
-          .join('');
         const clean =
           options.cleanVocal !== false
             ? { enabled: true, threshold: options.cleanThreshold ?? 12 }
@@ -548,7 +542,6 @@ export default function TimingView({
         const segments = await alignVocals(
           sep.vocalsPath,
           options.languageToken,
-          lyricsPrompt,
           clean,
           (p) => onAutoTimingProgressChange?.(p),
         );

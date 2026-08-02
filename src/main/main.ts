@@ -254,7 +254,6 @@ function registerProjectHandlers() {
       _event,
       vocalsPath: string,
       languageToken: number,
-      lyricsPrompt?: string,
       clean?: { enabled: boolean; threshold: number },
     ) => {
       // @ts-expect-error dynamic import resolved by webpack
@@ -263,7 +262,6 @@ function registerProjectHandlers() {
         const result = await alignVocal(
           vocalsPath,
           languageToken,
-          lyricsPrompt,
           clean,
           (p: number) => {
             _event.sender.send(IPC.WHISPER_ALIGN_PROGRESS, p);
