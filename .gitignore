@@ -3,8 +3,13 @@ logs
 *.log
 
 # Utils
-models/
-ffmpeg/
+models/separate/
+models/whisper/
+ffmpeg/bin/
+ffmpeg/doc/
+ffmpeg/presets/
+ffmpeg/LICENSE
+ffmpeg/README.txt
 
 # Docs
 docs/

@@ -46,6 +46,21 @@ Necokara 是一款桌面端卡拉OK字幕视频制作工具，支持歌词编辑
 | Windows | `Necokara-Portable-x.x.x_win64.exe`（便携版，免安装）    |
 | Linux   | `Necokara-x.x.x_linux64.AppImage`（需在 Linux 环境构建） |
 
+### 🧠 模型下载（用户自带）
+
+Necokara **不捆绑任何模型**，由用户自行从官方源下载（bring-your-own model），应用仅提供下载辅助脚本与资源配置。
+
+```bash
+node models/download-model.mjs            # 下载全部模型（人声分离 + 语音对齐）
+node models/download-model.mjs vocal      # 仅人声分离模型
+node models/download-model.mjs whisper    # 仅语音对齐模型
+node models/download-model.mjs --list     # 查看可用模型
+```
+
+- 模型许可证遵循各模型页声明（如 whisper MIT、MDX-Net OpenRAIL），请自行确认是否符合你的使用场景
+- 下载完成后，在应用「资源配置」中指向模型目录即可使用
+- 应用内**不内置一键下载**，仅提供此辅助脚本供用户手动运行
+
 ### 🔧 从源码构建
 
 ```bash
@@ -105,6 +120,21 @@ Get the latest build from [Releases](https://github.com/Chrollis/Necokara/releas
 | Windows  | `Necokara-Setup-x.x.x_win64.exe` (installer)                            |
 | Windows  | `Necokara-Portable-x.x.x_win64.exe` (portable)                          |
 | Linux    | `Necokara-x.x.x_linux64.AppImage` (requires Linux environment to build) |
+
+### 🧠 Model download (bring-your-own)
+
+Necokara does **not bundle any models** — users download them from the official sources. The app only provides a helper download script and a resource config.
+
+```bash
+node models/download-model.mjs            # download all models (vocal separation + speech alignment)
+node models/download-model.mjs vocal      # vocal separation model only
+node models/download-model.mjs whisper    # speech alignment model only
+node models/download-model.mjs --list     # list available models
+```
+
+- Model licenses follow each model page (e.g. whisper MIT, MDX-Net OpenRAIL) — verify they fit your use case
+- After downloading, point the app's "Resource Config" at the model directory
+- The app does **not** download models itself; the script is provided for users to run manually
 
 ### 🔧 Build from source
 
