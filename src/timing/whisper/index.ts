@@ -13,7 +13,7 @@ import * as fs from 'fs';
 import { logMelSpectrogram } from './mel';
 import { WhisperTokenizer } from './tokenizer';
 import { transcribe, type WhisperSegment } from './transcribe';
-import { averageCrossAttention } from './attention';
+import { lastTokenAttention } from './attention';
 import { createSession, loadOnnx } from '../onnx';
 
 const SAMPLE_RATE = 16000;
@@ -22,12 +22,24 @@ const CHUNK_SAMPLES = 30 * SAMPLE_RATE; // 480000
 /** Minimal onnxruntime InferenceSession surface used by the worker. */
 export interface OnnxSession {
   run(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
+  inputNames: readonly string[];
   outputNames: readonly string[];
+}
+
+/** KV-cache state for one decoder pass (present.* outputs). */
+export interface KVTensor {
+  data: Float32Array;
+  dims: number[];
+}
+export interface KVState {
+  [name: string]: KVTensor;
 }
 
 export interface WhisperModel {
   encoderSession: OnnxSession;
   decoderSession: OnnxSession;
+  /** KV-cache incremental decoder (decoder_with_past_model.onnx), always present */
+  decoderPastSession: OnnxSession;
   tokenizer: WhisperTokenizer;
   languageToken: number;
   suppressTokens: number[];
@@ -52,11 +64,19 @@ export async function loadWhisperModel(
   const onnxDir = path.join(modelDir, 'onnx');
   const encoderPath = path.join(onnxDir, 'encoder_model.onnx');
   const decoderPath = path.join(onnxDir, 'decoder_model.onnx');
-  if (!fs.existsSync(encoderPath) || !fs.existsSync(decoderPath)) {
-    throw new Error(`whisper model not found in ${modelDir}`);
+  const decoderPastPath = path.join(onnxDir, 'decoder_with_past_model.onnx');
+  if (
+    !fs.existsSync(encoderPath) ||
+    !fs.existsSync(decoderPath) ||
+    !fs.existsSync(decoderPastPath)
+  ) {
+    throw new Error(
+      `whisper model not found in ${modelDir} (need encoder/decoder/decoder_with_past onnx)`,
+    );
   }
   const encoderSession = await createSession(encoderPath);
   const decoderSession = await createSession(decoderPath);
+  const decoderPastSession = await createSession(decoderPastPath);
 
   const vocabJson = JSON.parse(
     fs.readFileSync(path.join(modelDir, 'vocab.json'), 'utf-8'),
@@ -82,6 +102,7 @@ export async function loadWhisperModel(
   return {
     encoderSession,
     decoderSession,
+    decoderPastSession,
     tokenizer,
     languageToken: sp.ja,
     suppressTokens,
@@ -111,31 +132,79 @@ export async function transcribeAudio(
     currentHidden = out[encoderSession.outputNames[0]];
     return currentHidden;
   };
+  /**
+   * Incremental decoder:
+   *  - `inputIds.length > 1` → full-sequence pass (no KV), returns initial KV
+   *  - `inputIds.length === 1` → single-token incremental pass with `kv`
+   * Returns the logits row predicting the NEXT token + updated KV + the new
+   * token's cross-attention row [Tenc].
+   */
   const decoderFn = async (
     inputIds: number[],
-  ): Promise<{ logits: Float32Array; attn?: Float32Array | null }> => {
-    const out = await decoderSession.run({
+    kv?: KVState | null,
+  ): Promise<{
+    logits: Float32Array;
+    kv: KVState;
+    attn: Float32Array | null;
+  }> => {
+    const isIncremental = inputIds.length === 1 && kv != null;
+    const session = isIncremental ? model.decoderPastSession : decoderSession;
+    const feeds: Record<string, unknown> = {
       input_ids: new ort.Tensor(
         'int64',
         BigInt64Array.from(inputIds.map((x) => BigInt(x))),
         [1, inputIds.length],
       ),
       encoder_hidden_states: currentHidden,
-    });
-    const logits = (
-      out[decoderSession.outputNames[0]] as { data: Float32Array }
-    ).data;
-    // cross-attention for ALL token rows [L, Tenc], averaged over the official
-    // alignment heads only (see attention.ts).
-    const crossAttnNames: string[] = decoderSession.outputNames.filter((n) =>
+    };
+    if (isIncremental) {
+      // feed past_key_values.* from the cached present.* KV
+      for (const name of session.inputNames) {
+        const src = kv[name.replace('past_key_values.', 'present.')];
+        if (name.startsWith('past_key_values.') && src) {
+          feeds[name] = new ort.Tensor('float32', src.data, src.dims);
+        }
+      }
+    }
+    const out = await session.run(feeds);
+    const logitsName =
+      session.outputNames.find((n) => n === 'logits') ?? session.outputNames[0];
+    const full = out[logitsName] as { data: Float32Array; dims?: number[] };
+    // Full-sequence pass returns ALL logits rows [L, V] so the caller can read
+    // the sot row (no-speech) and the last row (next-token prediction).
+    // Incremental pass returns a single row [V].
+    const logits = full.data;
+
+    // KV cache: collect present.* outputs for the next incremental step.
+    // NOTE: the with_past decoder only re-emits the DECODER key/value cache
+    // (48 tensors); the ENCODER cache is unchanged across steps (the encoder
+    // hidden states are fixed for the whole window), so we must carry the
+    // previous encoder KV forward — otherwise the next incremental step is
+    // missing its past_key_values.N.encoder.* inputs.
+    const kvOut: KVState = {};
+    if (isIncremental && kv) {
+      for (const [name, t] of Object.entries(kv)) {
+        if (name.startsWith('present.') && name.includes('.encoder.')) {
+          kvOut[name] = t;
+        }
+      }
+    }
+    for (const n of session.outputNames) {
+      if (n.startsWith('present.')) {
+        const t = out[n] as { data: Float32Array; dims?: number[] };
+        kvOut[n] = { data: t.data, dims: (t.dims ?? []).slice() };
+      }
+    }
+
+    // cross-attention for the newly predicted token row (word timestamps)
+    const crossAttnNames: string[] = session.outputNames.filter((n) =>
       n.startsWith('cross_attentions.'),
     );
-    const attn = averageCrossAttention(
+    const attn = lastTokenAttention(
       out as Record<string, { data: ArrayLike<number>; dims?: number[] }>,
       crossAttnNames,
-      inputIds.length,
     );
-    return { logits, attn };
+    return { logits, kv: kvOut, attn };
   };
 
   return transcribe(encoderFn, decoderFn, mel, tokenizer, {
@@ -143,6 +212,7 @@ export async function transcribeAudio(
     suppressTokens: model.suppressTokens,
     noSpeechThreshold: opts.noSpeechThreshold,
     logprobThreshold: opts.logprobThreshold,
+    incremental: true,
     onProgress: opts.onProgress,
   });
 }

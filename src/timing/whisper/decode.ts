@@ -25,6 +25,10 @@ export interface DecodeOptions {
   /** if true, run one extra final decoder pass over the complete token sequence
    * and return per-token cross-attention [nTokens, nFrames] for word timestamps */
   needCrossAttn?: boolean;
+  /** true when the decoderFn supports KV-cache incremental decoding
+   * (first step runs the full sequence, later steps feed 1 token + KV);
+   * false runs the whole sequence every step (no with_past model). */
+  incremental?: boolean;
 }
 
 export interface DecodeResult {
@@ -96,18 +100,27 @@ function applyTimestampRules(
 }
 
 /**
- * Decode one window. `decoderFn(inputIds)` must return
- * `{ logits: Float32Array[L, V], attn?: Float32Array[L, nFrames] }` where
- * `attn` is the cross-attention of EVERY token row to encoder frames, packed
- * row-major (null if the model does not expose it).
+ * Decode one window using KV-cache incremental decoding.
  *
- * When `opts.needCrossAttn` is set, one extra final pass over the complete
- * token sequence is made so the returned `crossAttn` aligns with `tokens`.
+ * `decoderFn(inputIds, kv?)` runs the decoder:
+ *   - inputIds.length > 1 → full-sequence pass (no KV); returns ALL logits rows
+ *     [L, V] so the caller can read any row (no-speech at the sot position),
+ *     plus the initial `kv` and the LAST row's attention.
+ *   - inputIds.length === 1 → single-token incremental pass with `kv`; returns
+ *     the single next-token logits row [V] and the new `kv`.
+ *
+ * Returns per-token attention rows accumulated during generation, packed
+ * [nGenerated, nFrames] for word-level timestamps.
  */
 export async function decodeWindow(
   decoderFn: (
     inputIds: number[],
-  ) => Promise<{ logits: Float32Array; attn?: Float32Array | null }>,
+    kv?: unknown,
+  ) => Promise<{
+    logits: Float32Array;
+    kv?: unknown;
+    attn?: Float32Array | null;
+  }>,
   tokenizer: WhisperTokenizer,
   opts: DecodeOptions,
 ): Promise<DecodeResult> {
@@ -137,25 +150,45 @@ export async function decodeWindow(
   let tokens = initial.slice();
   let sumLogprob = 0;
   let noSpeechProb = NaN;
+  let kv: unknown = null;
+  let w = 0; // attention row width (Tenc)
+  const crossAttnRows: Float32Array[] = [];
+  const incremental = opts.incremental ?? false;
 
   for (let step = 0; step < sampleLen; step++) {
-    const { logits } = await decoderFn(tokens); // logits [L, V]
-    const L = tokens.length;
-    const V = logits.length / L;
-    // no-speech probability: softmax over logits at the sot position
-    if (step === 0 && sp.noSpeech >= 0) {
+    // first step always runs the full sequence (reads no-speech + seeds KV).
+    // With incremental (with_past) later steps feed 1 token + KV; without it,
+    // every step re-runs the whole (growing) sequence.
+    const isFirst = step === 0;
+    const inputIds = isFirst || !incremental ? tokens : tokens.slice(-1);
+    const res = await decoderFn(inputIds, isFirst ? null : kv);
+    kv = res.kv ?? null;
+    if (res.attn) {
+      w = res.attn.length;
+      // only keep attention of GENERATED tokens (skip the initial sot rows)
+      if (!isFirst) crossAttnRows.push(res.attn);
+    }
+
+    // logits layout: the decoderFn returns one row per input token.
+    //  - full-sequence pass returns ALL rows [L, V] → take the last row
+    //  - incremental pass returns a single row [V] (inputIds.length === 1)
+    const seqLen = inputIds.length;
+    const V = res.logits.length / seqLen;
+    const last = res.logits.subarray((seqLen - 1) * V, seqLen * V);
+
+    // no-speech probability: read the sot row from the full first-pass logits
+    if (isFirst && sp.noSpeech >= 0 && tokens.length > sotIndex) {
       const off = sotIndex * V;
       let m = -Infinity;
       for (let v = 0; v < V; v++) {
-        const x = logits[off + v];
+        const x = res.logits[off + v];
         if (x > m) m = x;
       }
       let s = 0;
-      for (let v = 0; v < V; v++) s += Math.exp(logits[off + v] - m);
-      noSpeechProb = Math.exp(logits[off + sp.noSpeech] - m) / s;
+      for (let v = 0; v < V; v++) s += Math.exp(res.logits[off + v] - m);
+      noSpeechProb = Math.exp(res.logits[off + sp.noSpeech] - m) / s;
     }
 
-    const last = logits.subarray((L - 1) * V, L * V);
     const fl = new Float32Array(last);
 
     // SuppressBlank: first step suppress ' ' and eot
@@ -201,21 +234,12 @@ export async function decodeWindow(
   }
 
   const generated = tokens.length - sampleBegin;
-  // one extra final pass over the complete sequence -> all token rows' attention,
-  // then keep only the generated (post-prompt) rows so crossAttn aligns with tokens.
+  // pack the accumulated per-token attention rows into [nGenerated, nFrames]
   let crossAttn: Float32Array | null = null;
-  if (opts.needCrossAttn && generated > 0) {
-    const { attn } = await decoderFn(tokens);
-    if (attn && attn.length >= tokens.length) {
-      const T = tokens.length;
-      const w = attn.length / T;
-      crossAttn = new Float32Array(generated * w);
-      for (let i = 0; i < generated; i++) {
-        crossAttn.set(
-          attn.subarray((sampleBegin + i) * w, (sampleBegin + i + 1) * w),
-          i * w,
-        );
-      }
+  if (opts.needCrossAttn && crossAttnRows.length > 0) {
+    crossAttn = new Float32Array(crossAttnRows.length * w);
+    for (let i = 0; i < crossAttnRows.length; i++) {
+      crossAttn.set(crossAttnRows[i], i * w);
     }
   }
   return {

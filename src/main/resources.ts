@@ -90,8 +90,8 @@ export function findSeparateModel(modelDir: string): string | null {
 
 /**
  * 在模型目录下查找 whisper 对齐模型（约定：`whisper/onnx/encoder_model.onnx` +
- * `decoder_model.onnx` + `whisper/vocab.json` + `whisper/tokenizer.json`）。
- * 返回 `whisper` 目录绝对路径或 null。
+ * `decoder_model.onnx` + `decoder_with_past_model.onnx` + `whisper/vocab.json` +
+ * `whisper/tokenizer.json`）。返回 `whisper` 目录绝对路径或 null。
  */
 export function findWhisperModel(modelDir: string): string | null {
   if (!modelDir) return null;
@@ -101,6 +101,7 @@ export function findWhisperModel(modelDir: string): string | null {
     const needed = [
       path.join(onnxDir, 'encoder_model.onnx'),
       path.join(onnxDir, 'decoder_model.onnx'),
+      path.join(onnxDir, 'decoder_with_past_model.onnx'),
       path.join(whisperDir, 'vocab.json'),
       path.join(whisperDir, 'tokenizer.json'),
     ];
@@ -261,6 +262,22 @@ async function checkWhisperInterface(
         message: 'whisper decoder 输入应为 input_ids + encoder_hidden_states',
       });
     }
+    // KV-cache incremental decoder (decoder_with_past_model.onnx): must accept
+    // past_key_values.* inputs for incremental decoding to work.
+    const past = await ort.InferenceSession.create(
+      path.join(wOnnxDir, 'decoder_with_past_model.onnx'),
+      { executionProviders: ['cpu'] },
+    );
+    const pastNames: string[] = past.inputMetadata.map(
+      (m: { name: string }) => m.name,
+    );
+    if (!pastNames.some((n: string) => n.startsWith('past_key_values.'))) {
+      issues.push({
+        severity: 'error',
+        message:
+          'whisper decoder_with_past 应包含 past_key_values.* 输入（KV 增量解码需要）',
+      });
+    }
   } catch (e) {
     issues.push({
       severity: 'error',
@@ -374,6 +391,10 @@ export async function inspectModelDir(
       const required: Array<[string, string]> = [
         ['encoder_model.onnx', path.join(wOnnxDir, 'encoder_model.onnx')],
         ['decoder_model.onnx', path.join(wOnnxDir, 'decoder_model.onnx')],
+        [
+          'decoder_with_past_model.onnx',
+          path.join(wOnnxDir, 'decoder_with_past_model.onnx'),
+        ],
         ['vocab.json', path.join(whisperDir, 'vocab.json')],
         ['tokenizer.json', path.join(whisperDir, 'tokenizer.json')],
       ];
@@ -391,13 +412,16 @@ export async function inspectModelDir(
           const variants = fs
             .readdirSync(wOnnxDir)
             .filter((n) => n.toLowerCase().endsWith('.onnx'));
-          const extras = variants.filter(
-            (n) => n !== 'encoder_model.onnx' && n !== 'decoder_model.onnx',
-          );
+          const known = [
+            'encoder_model.onnx',
+            'decoder_model.onnx',
+            'decoder_with_past_model.onnx',
+          ];
+          const extras = variants.filter((n) => !known.includes(n));
           if (extras.length > 0) {
             issues.push({
               severity: 'warn',
-              message: `whisper/onnx/ 有额外模型变体（${extras.join('、')}），建议只保留 encoder_model.onnx + decoder_model.onnx`,
+              message: `whisper/onnx/ 有额外模型变体（${extras.join('、')}），建议只保留 encoder_model.onnx + decoder_model.onnx + decoder_with_past_model.onnx`,
             });
           }
         }

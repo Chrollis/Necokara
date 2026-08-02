@@ -36,10 +36,11 @@ const MODELS = {
     license: 'OpenRAIL (commercial use permitted; verify yourself)',
   },
   whisper: {
-    repo: 'onnx-community/whisper-medium_timestamped',
+    repo: 'onnx-community/whisper-base_timestamped',
     files: [
       'onnx/encoder_model.onnx',
       'onnx/decoder_model.onnx',
+      'onnx/decoder_with_past_model.onnx',
       'config.json',
       'generation_config.json',
       'preprocessor_config.json',
@@ -52,9 +53,9 @@ const MODELS = {
       'added_tokens.json',
     ],
     dir: 'whisper',
-    note: 'Whisper medium timestamped (multilingual incl. Japanese) ONNX: ASR + word-level timestamps',
+    note: 'Whisper base timestamped (multilingual incl. Japanese) ONNX: ASR + word-level timestamps',
     license:
-      'MIT (derived from openai/whisper-medium; the onnx-community conversion has no explicit license tag)',
+      'MIT (derived from openai/whisper-base; the onnx-community conversion has no explicit license tag)',
   },
 };
 

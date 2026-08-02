@@ -18,9 +18,7 @@ export function loadOnnx(): any {
   const ort = eval('require')('onnxruntime-node');
   if (!ort) throw new Error('onnxruntime-node is not available');
   // eslint-disable-next-line no-console
-  console.log(
-    `[onnx] onnxruntime-node loaded (pid ${process.pid}, thread ${typeof process.threadId === 'number' ? process.threadId : 'main'})`,
-  );
+  console.log(`[onnx] onnxruntime-node loaded (pid ${process.pid})`);
   return ort;
 }
 

@@ -36,6 +36,8 @@ export interface TranscribeOptions {
   suppressTokens: number[];
   noSpeechThreshold?: number; // default 0.6
   logprobThreshold?: number; // default -1.0
+  /** KV-cache incremental decoding (with_past model available) */
+  incremental?: boolean;
   onProgress?: (p: number) => void;
 }
 
@@ -94,6 +96,7 @@ export async function transcribe(
       suppressTokens: opts.suppressTokens,
       promptTokens: allTokens,
       needCrossAttn: true,
+      incremental: opts.incremental,
     });
     const tokens = result.tokens;
 
