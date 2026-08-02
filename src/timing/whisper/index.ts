@@ -14,6 +14,7 @@ import { logMelSpectrogram } from './mel';
 import { WhisperTokenizer } from './tokenizer';
 import { transcribe, type WhisperSegment } from './transcribe';
 import { averageCrossAttention } from './attention';
+import { createSession, loadOnnx } from '../onnx';
 
 const SAMPLE_RATE = 16000;
 const CHUNK_SAMPLES = 30 * SAMPLE_RATE; // 480000
@@ -21,7 +22,7 @@ const CHUNK_SAMPLES = 30 * SAMPLE_RATE; // 480000
 /** Minimal onnxruntime InferenceSession surface used by the worker. */
 export interface OnnxSession {
   run(inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
-  outputNames: string[];
+  outputNames: readonly string[];
 }
 
 export interface WhisperModel {
@@ -40,13 +41,6 @@ export interface WhisperAlignOptions {
   onProgress?: (p: number) => void;
 }
 
-function loadOnnx(): any {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
-  const ort = eval('require')('onnxruntime-node');
-  if (!ort) throw new Error('onnxruntime-node is not available');
-  return ort;
-}
-
 /**
  * Load the Whisper ONNX encoder/decoder + tokenizer from a model directory.
  * @param modelDir e.g. "models/whisper"
@@ -61,12 +55,8 @@ export async function loadWhisperModel(
   if (!fs.existsSync(encoderPath) || !fs.existsSync(decoderPath)) {
     throw new Error(`whisper model not found in ${modelDir}`);
   }
-  const encoderSession = await ort.InferenceSession.create(encoderPath, {
-    executionProviders: ['cpu'],
-  });
-  const decoderSession = await ort.InferenceSession.create(decoderPath, {
-    executionProviders: ['cpu'],
-  });
+  const encoderSession = await createSession(encoderPath);
+  const decoderSession = await createSession(decoderPath);
 
   const vocabJson = JSON.parse(
     fs.readFileSync(path.join(modelDir, 'vocab.json'), 'utf-8'),

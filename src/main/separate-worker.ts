@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { stft, istft, hannWindow } from '../timing/fft';
+import { createSession, loadOnnx } from '../timing/onnx';
 
 const SR = 44100;
 const N_FFT = 6144;
@@ -137,11 +138,9 @@ parentPort?.on(
         return;
       }
 
-      // 2. onnx session
-      const ort = eval('require')('onnxruntime-node') as any;
-      const session = await ort.InferenceSession.create(modelFilePath, {
-        executionProviders: ['cpu'],
-      });
+      // 2. onnx session (auto GPU: DirectML when available, else CPU)
+      const session = await createSession(modelFilePath);
+      const ort = loadOnnx();
 
       // 3. 两层切块分离（外层 15s 大块 + 1s margin，内层 gen_size 子块 + trim）
       const vL = new Float64Array(n);

@@ -1,6 +1,6 @@
 {
   "name": "Necokara",
-  "version": "0.12.0-alpha.4",
+  "version": "0.12.0-alpha.5",
   "description": "Necokara",
   "license": "GPL-3.0-only",
   "author": {
@@ -12,5 +12,9 @@
     "rebuild": "node -r ts-node/register ../../.erb/scripts/electron-rebuild.js",
     "postinstall": "npm run rebuild && npm run link-modules",
     "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
+  },
+  "dependencies": {
+    "@radzivon.bartoshyk/zaft": "^0.3.13",
+    "onnxruntime-node": "^1.27.0"
   }
 }
