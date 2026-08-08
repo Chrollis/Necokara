@@ -11,18 +11,10 @@ export type {
 export {
   createTimingState,
   createFineTuneState,
-  setMode,
-  setSelectedBeatIndex,
-  setCurrentPlayheadMs,
-  setIsPlaying,
-  setAudioFilePath,
-  addPendingBeat,
-  removePendingBeat,
   removePendingBeats,
-  clearPendingBeats,
 } from './state';
 
-export { buildTimingView, getBeatPositions } from './view';
+export { buildTimingView } from './view';
 
 export {
   moveToNextBeat,
@@ -41,9 +33,5 @@ export {
   dragBoundaryClampedTime,
 } from './fineTune';
 
-export {
-  serializeTimingState,
-  deserializeTimingState,
-  isValidTimingData,
-} from './serialization';
+export { serializeTimingState, deserializeTimingState } from './serialization';
 export type { SerializedTimingState } from './serialization';

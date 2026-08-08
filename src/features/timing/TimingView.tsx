@@ -197,7 +197,7 @@ export default function TimingView({
   const [editingTimeValue, setEditingTimeValue] = useState('');
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [autoTimingDialog, setAutoTimingDialog] = useState<{
-    languages: Array<{ code: string; id: number }>;
+    languages: string[];
   } | null>(null);
   const [cardCtxMenu, setCardCtxMenu] = useState<{
     x: number;
@@ -211,6 +211,39 @@ export default function TimingView({
   isMultiLineRef.current = multiLine;
   const fmtSec = (s: number) =>
     `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  // ── fake "model loading" progress ────────────────────────────────────────
+  // Model loading (demucs / faster-whisper) takes seconds before the first
+  // real PROGRESS arrives; show a slowly-climbing 0→15% so the bar isn't
+  // stuck at 0%. The climb is logarithmic: each tick eats a fixed fraction of
+  // the remaining distance to 15%, so it gets slower and slower. Cleared as
+  // soon as the first real progress callback fires, which then takes over
+  // from 15% (real 0% → shown 15%) so the bar never jumps back down.
+  const fakeProgressRef = useRef<number | null>(null);
+  const stopFakeProgress = () => {
+    if (fakeProgressRef.current !== null) {
+      window.clearInterval(fakeProgressRef.current);
+      fakeProgressRef.current = null;
+    }
+  };
+  const FAKE_CAP = 0.15;
+  const FAKE_DECAY = 0.04; // fraction of remaining gap eaten per tick
+  const startFakeProgress = () => {
+    stopFakeProgress();
+    let v = 0;
+    onAutoTimingProgressChange?.(0);
+    fakeProgressRef.current = window.setInterval(() => {
+      v = v + (FAKE_CAP - v) * FAKE_DECAY; // logarithmic approach → 15%
+      onAutoTimingProgressChange?.(v);
+    }, 150);
+  };
+  // Wrap a real progress callback: on the first call, hand over from the fake
+  // progress and remap the real 0..1 onto 15%..100% so the bar continues
+  // smoothly from where the fake climb stopped.
+  const makeRealProgress = (cb?: (p: number) => void) => (p: number) => {
+    stopFakeProgress();
+    cb?.(FAKE_CAP + p * (1 - FAKE_CAP));
+  };
   const lyricsRef = useRef<HTMLDivElement>(null);
   const columnsRowRef = useRef<HTMLDivElement>(null);
 
@@ -493,8 +526,8 @@ export default function TimingView({
         // 3. separate (or reuse a cached `音频名-vocal.wav` when it matches
         //    the source duration — separation is skipped entirely, so the
         //    export checkboxes are ignored for cached runs)
-        onAutoTimingProgressChange?.(0);
         onAutoTimingStageChange?.('separate');
+        startFakeProgress();
         let sep: SeparateResult | undefined;
         const cachePath = options.useSeparateCache
           ? vocalCachePath(state.audioFilePath)
@@ -505,6 +538,8 @@ export default function TimingView({
           const cacheDur = info ? info.frames / info.sampleRate : 0;
           if (info && Math.abs(cacheDur - srcDur) < 0.25) {
             sep = { vocalsPath: cachePath, exported: [] };
+            stopFakeProgress();
+            onAutoTimingProgressChange?.(1);
             snack?.show('使用分离缓存…');
           } else {
             snack?.show('未找到匹配的分离缓存，重新分离…');
@@ -519,7 +554,7 @@ export default function TimingView({
               outputDir,
               exportBaseName,
             },
-            (p) => onAutoTimingProgressChange?.(p),
+            makeRealProgress((p) => onAutoTimingProgressChange?.(p)),
           );
         }
 
@@ -533,8 +568,8 @@ export default function TimingView({
         }
 
         // 4. align
-        onAutoTimingProgressChange?.(0);
         onAutoTimingStageChange?.('align');
+        startFakeProgress();
         snack?.show('正在 whisper 对齐…');
         const clean =
           options.cleanVocal !== false
@@ -545,10 +580,10 @@ export default function TimingView({
         const lyricsText = lyrics.readingPrompt();
         const aligned = await alignVocals(
           sep.vocalsPath,
-          options.languageToken,
+          options.languageCode,
           lyricsText,
           clean,
-          (p) => onAutoTimingProgressChange?.(p),
+          makeRealProgress((p) => onAutoTimingProgressChange?.(p)),
         );
         const segments = aligned.segments;
         if (!segments || segments.length === 0) {
@@ -581,6 +616,7 @@ export default function TimingView({
         snack?.show('自动打轴失败');
         console.error('[auto timing]', err);
       } finally {
+        stopFakeProgress();
         onAutoTimingBusyChange?.(false);
         onAutoTimingStageChange?.(null);
         onAutoTimingProgressChange?.(-1);

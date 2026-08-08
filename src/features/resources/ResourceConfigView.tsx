@@ -13,11 +13,17 @@ import './resource-config.css';
 interface ResourceConfigViewProps {
   updateStatus: UpdateStatus;
   onInstallUpdate: () => void;
+  /** true while a backend validation is running (lifted to App so it
+   * survives page switches and covers the startup warm-up) */
+  validating: boolean;
+  onValidatingChange: (v: boolean) => void;
 }
 
 export default function ResourceConfigView({
   updateStatus,
   onInstallUpdate,
+  validating,
+  onValidatingChange,
 }: ResourceConfigViewProps) {
   const [config, setConfig] = useState<ResourceConfig>({
     ffmpegPath: '',
@@ -34,7 +40,6 @@ export default function ResourceConfigView({
     null,
   );
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   const configRef = useRef(config);
   const ffmpegPathRef = useRef('');
@@ -48,35 +53,63 @@ export default function ResourceConfigView({
     pythonPathRef.current = cfg.pythonPath;
   }, []);
 
-  const refresh = useCallback(async (cfg: ResourceConfig) => {
-    const f = await window.electron.resources.validateFfmpeg(cfg.ffmpegPath);
-    if (ffmpegPathRef.current === cfg.ffmpegPath) setFfmpegResult(f);
-    const p = await window.electron.resources.validatePython(cfg.pythonPath);
-    if (pythonPathRef.current === cfg.pythonPath) setPythonResult(p);
-  }, []);
+  /**
+   * Re-run validation for the given config and show the results. This is the
+   * single "校验中" entry point — every validation (path change / refresh
+   * button) goes through here, driving the lifted `onValidatingChange` so the
+   * refresh button shows the spinner and it survives page switches.
+   */
+  const runValidation = useCallback(
+    async (cfg: ResourceConfig) => {
+      onValidatingChange(true);
+      try {
+        const st = await window.electron.resources.getStatus(true);
+        if (ffmpegPathRef.current === cfg.ffmpegPath)
+          setFfmpegResult(st.ffmpeg);
+        if (pythonPathRef.current === cfg.pythonPath)
+          setPythonResult(st.python);
+      } finally {
+        onValidatingChange(false);
+      }
+    },
+    [onValidatingChange],
+  );
 
-  // Load config on mount
+  // Load config on mount. Validation already ran once when the app started
+  // (main process warms up getBackendStatus); here we read the cached result.
+  // If the startup warm-up is still running, getStatus() waits for it and the
+  // spinner reflects that (via the lifted validating state).
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const cfg = await window.electron.resources.getConfig();
-      if (cancelled) return;
-      applyConfig(cfg);
-      setLoading(false);
-      await refresh(cfg);
+      onValidatingChange(true);
+      try {
+        const cfg = await window.electron.resources.getConfig();
+        if (cancelled) return;
+        applyConfig(cfg);
+        setLoading(false);
+        const st = await window.electron.resources.getStatus();
+        if (cancelled) return;
+        if (ffmpegPathRef.current === cfg.ffmpegPath)
+          setFfmpegResult(st.ffmpeg);
+        if (pythonPathRef.current === cfg.pythonPath)
+          setPythonResult(st.python);
+      } finally {
+        if (!cancelled) onValidatingChange(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [applyConfig, refresh]);
+  }, [applyConfig, onValidatingChange]);
 
   const save = useCallback(
     async (next: ResourceConfig) => {
       const saved = await window.electron.resources.setConfig(next);
       applyConfig(saved);
-      await refresh(saved);
+      await runValidation(saved);
     },
-    [applyConfig, refresh],
+    [applyConfig, runValidation],
   );
 
   const pickFfmpeg = useCallback(async () => {
@@ -99,14 +132,9 @@ export default function ResourceConfigView({
     save({ ...configRef.current, pythonPath: '' });
   }, [save]);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await refresh(configRef.current);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refresh]);
+  const handleRefresh = useCallback(() => {
+    return runValidation(configRef.current);
+  }, [runValidation]);
 
   // Badge / detail helpers
   const ffmpegBadge = (() => {
@@ -125,7 +153,7 @@ export default function ResourceConfigView({
     <div className="rc-root">
       <ResourceConfigToolbar
         onRefresh={handleRefresh}
-        refreshing={refreshing}
+        refreshing={validating}
       />
       <div className="rc-body">
         {loading ? (
@@ -256,9 +284,17 @@ export default function ResourceConfigView({
                     python.exe。
                   </span>
                 ) : pythonResult?.ok ? (
-                  <span className="rc-detail-ok">
+                  <span className="rc-detail-ok" style={{ lineHeight: 1.6 }}>
                     <span className="mdi mdi-check-circle-outline" />{' '}
-                    {pythonResult.version}（依赖齐全）
+                    {pythonResult.version}
+                    {pythonResult.deps && pythonResult.deps.length > 0 && (
+                      <span className="rc-detail-mute">
+                        {' · '}
+                        {pythonResult.deps
+                          .map((d) => `${d.name} ${d.version}`)
+                          .join(' · ')}
+                      </span>
+                    )}
                   </span>
                 ) : (
                   <span className="rc-detail-bad">

@@ -56,16 +56,3 @@ const PUNCTUATION_CHARS = '「」『』（）、。！？…・～~,.;:!?"\'';
 export function isPunctuationChar(ch: string): boolean {
   return PUNCTUATION_CHARS.includes(ch);
 }
-
-/** Whether a syllable is punctuation (every char is punctuation). */
-export function isPunctuationSyllable(syl: Syllable): boolean {
-  return syl.reading.length > 0 && [...syl.reading].every(isPunctuationChar);
-}
-
-export function syllableEquals(a: Syllable, b: Syllable): boolean {
-  return (
-    a.reading === b.reading &&
-    a.time.msec === b.time.msec &&
-    a.isSet === b.isSet
-  );
-}

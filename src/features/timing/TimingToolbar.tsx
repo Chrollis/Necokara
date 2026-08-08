@@ -189,7 +189,7 @@ export default function TimingToolbar({
             icon={multiLine ? 'format-columns' : 'view-list'}
             onClick={onToggleMultiLine}
           >
-            {multiLine ? '多行视图' : '单行视图'}
+            {multiLine ? '音节视图' : '单词视图'}
           </ToolbarButton>
         )}
         {!timelineView && onAutoTiming && (

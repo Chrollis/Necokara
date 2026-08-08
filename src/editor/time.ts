@@ -118,15 +118,3 @@ export function shiftTime(time: Time, offset: Time): Time {
 export function compareTime(a: Time, b: Time): number {
   return a.msec - b.msec;
 }
-
-export function timeEquals(a: Time, b: Time): boolean {
-  return a.msec === b.msec;
-}
-
-export function timeLessThan(a: Time, b: Time): boolean {
-  return a.msec < b.msec;
-}
-
-export function timeGreaterThan(a: Time, b: Time): boolean {
-  return a.msec > b.msec;
-}

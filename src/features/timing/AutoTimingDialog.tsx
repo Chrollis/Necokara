@@ -1,13 +1,12 @@
 import { useRef, useState } from 'react';
 import { useClickOutside } from '../../shared/hooks/useClickOutside';
-import { whisperLangName } from '../../shared/whisper-languages';
+import LangSelect from '../../shared/components/LangSelect';
 
 export interface AutoTimingOptions {
   exportVocals: boolean;
   separateOnly: boolean;
   useSeparateCache: boolean;
-  languageToken: number;
-  /** auto-timing language code (ja/zh/en), drives the alignment branch */
+  /** auto-timing language code (whisper code, e.g. 'ja') */
   languageCode: string;
   cleanVocal: boolean;
   cleanThreshold: number;
@@ -15,7 +14,8 @@ export interface AutoTimingOptions {
 }
 
 interface AutoTimingDialogProps {
-  languages: Array<{ code: string; id: number }>;
+  /** whisper language codes (99, in official order) */
+  languages: string[];
   onConfirm: (options: AutoTimingOptions) => void;
   onCancel: () => void;
 }
@@ -35,10 +35,8 @@ export default function AutoTimingDialog({
   const [snapToBeat, setSnapToBeat] = useState(false);
   const [cleanThreshold, setCleanThreshold] = useState(20);
   const [language, setLanguage] = useState<string>(
-    languages.find((l) => l.code === 'ja')?.code ?? languages[0]?.code ?? '',
+    languages.includes('ja') ? 'ja' : (languages[0] ?? ''),
   );
-
-  const lang = languages.find((l) => l.code === language);
 
   return (
     <div className="rem-overlay" ref={overlayRef}>
@@ -62,6 +60,32 @@ export default function AutoTimingDialog({
         <div className="rem-body">
           <div
             className="rem-row"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 10px',
+              border: '1px solid var(--hairline, rgba(128,128,128,0.3))',
+              borderRadius: 'var(--radius-sm, 6px)',
+              background: 'var(--canvas-soft, rgba(128,128,128,0.08))',
+              fontSize: '12px',
+              lineHeight: 1.5,
+              color: 'var(--mute)',
+            }}
+          >
+            <span className="mdi mdi-information-outline" />
+            请确保歌词与注音准确，以获得最佳对齐质量
+          </div>
+
+          <div
+            style={{
+              borderTop: '1px solid var(--ink-soft, rgba(128,128,128,0.3))',
+              margin: '10px 0',
+            }}
+          />
+
+          <div
+            className="rem-row"
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
             <span
@@ -73,20 +97,13 @@ export default function AutoTimingDialog({
               }}
             >
               <span className="mdi mdi-translate align-lang-icon" />
-              语言
+              歌词语言
             </span>
-            <select
-              className="rem-input"
+            <LangSelect
+              languages={languages}
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              style={{ width: 140, flex: 'none' }}
-            >
-              {languages.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {whisperLangName(l.code)}
-                </option>
-              ))}
-            </select>
+              onChange={setLanguage}
+            />
           </div>
 
           <div
@@ -229,13 +246,12 @@ export default function AutoTimingDialog({
           <button
             type="button"
             className="shared-btn shared-btn-primary"
-            disabled={!lang}
+            disabled={!language}
             onClick={() =>
               onConfirm({
                 exportVocals,
                 separateOnly,
                 useSeparateCache,
-                languageToken: lang?.id ?? -1,
                 languageCode: language,
                 cleanVocal,
                 cleanThreshold,

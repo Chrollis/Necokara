@@ -52,6 +52,10 @@ export default function App() {
   const [autoTimingStage, setAutoTimingStage] = useState<
     'separate' | 'align' | null
   >(null);
+  // Backend validation in progress. Lifted to App so it survives page
+  // switches (ResourceConfigView unmounts when leaving the resources page)
+  // and reflects the startup warm-up even before that page is opened.
+  const [validating, setValidating] = useState(false);
 
   const handleProjectChange = useCallback(() => {
     setProjectKey((k) => k + 1);
@@ -232,6 +236,8 @@ export default function App() {
           <ResourceConfigView
             updateStatus={updateStatus}
             onInstallUpdate={installUpdate}
+            validating={validating}
+            onValidatingChange={setValidating}
           />
         ) : (
           <TimingView

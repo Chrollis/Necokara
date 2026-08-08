@@ -14,10 +14,7 @@ import IPC, {
   PythonValidation,
   ResourceConfig,
 } from '../shared/ipc';
-import {
-  WHISPER_LANGUAGES,
-  whisperLanguageId,
-} from '../shared/whisper-languages';
+import { WHISPER_LANGUAGES } from '../shared/whisper-languages';
 
 const DEFAULT_CONFIG: ResourceConfig = { ffmpegPath: '', pythonPath: '' };
 
@@ -172,11 +169,32 @@ export function validatePython(pythonPath: string): Promise<PythonValidation> {
       });
       return;
     }
-    // One-shot probe: import the required inference deps + print the version.
-    // If any dep is missing the process exits non-zero and stderr mentions it.
+    // One-shot probe: import each required inference dep one by one, printing
+    // NECO_DEP OK <name> <version> per success and NECO_DEP FAIL <name> per
+    // failure; when all succeed it finally prints NECO_PY_OK <pyversion>.
+    // Version resolution: module `__version__` first, then importlib.metadata
+    // (module names and dist names differ, so both are tried).
     const probe = [
       '-c',
-      'import sys, stable_whisper, faster_whisper, demucs, numpy; print("NECO_PY_OK", sys.version.split()[0])',
+      [
+        'import sys, importlib, importlib.metadata as md',
+        'mods = ["stable_whisper", "faster_whisper", "demucs", "numpy"]',
+        'failed = []',
+        'for mod in mods:',
+        '    try:',
+        '        m = __import__(mod)',
+        '        v = getattr(m, "__version__", None)',
+        '        if v is None:',
+        '            try: v = md.version(mod)',
+        '            except Exception: v = "?"',
+        '        print(f"NECO_DEP OK {mod} {v}", flush=True)',
+        '    except Exception:',
+        '        failed.append(mod)',
+        '        print(f"NECO_DEP FAIL {mod}", flush=True)',
+        'if failed:',
+        '    sys.exit(1)',
+        'print("NECO_PY_OK", sys.version.split()[0], flush=True)',
+      ].join('\n'),
     ];
     try {
       execFile(
@@ -184,8 +202,28 @@ export function validatePython(pythonPath: string): Promise<PythonValidation> {
         probe,
         { timeout: 20000, windowsHide: true, encoding: 'utf8' },
         (err, stdout, stderr) => {
+          const text = `${stdout || ''}\n${stderr || ''}`;
+          const deps: Array<{ name: string; version: string }> = [];
+          const missingDeps: string[] = [];
+          for (const line of text.split(/\r?\n/)) {
+            const ok = /^NECO_DEP OK\s+(\S+)\s+(\S+)/.exec(line.trim());
+            if (ok) {
+              deps.push({ name: ok[1], version: ok[2] });
+              continue;
+            }
+            const fail = /^NECO_DEP FAIL\s+(\S+)/.exec(line.trim());
+            if (fail) missingDeps.push(fail[1]);
+          }
+          const pyVer = /NECO_PY_OK\s+(\S+)/.exec(text);
           if (err) {
-            const text = `${stderr || ''}${stdout || ''}`;
+            if (missingDeps.length > 0) {
+              resolve({
+                ok: false,
+                error: `缺少依赖：${missingDeps.join(' / ')}，请先运行 python\\conda-env.bat 安装环境`,
+                missingDeps,
+              });
+              return;
+            }
             if (/No module named|ModuleNotFoundError/.test(text)) {
               resolve({
                 ok: false,
@@ -197,12 +235,16 @@ export function validatePython(pythonPath: string): Promise<PythonValidation> {
             resolve({ ok: false, error: spawnErrorMessage(err) });
             return;
           }
-          const m = /NECO_PY_OK\s+(\S+)/.exec(stdout || '');
-          if (!m) {
+          if (!pyVer) {
             resolve({ ok: false, error: '无法解析 Python 版本' });
             return;
           }
-          resolve({ ok: true, version: `Python ${m[1]}`, depsOk: true });
+          resolve({
+            ok: true,
+            version: `Python ${pyVer[1]}`,
+            depsOk: true,
+            deps,
+          });
         },
       );
     } catch (err) {
@@ -227,38 +269,68 @@ let statusCache: {
   ffmpeg: FfmpegValidation;
 } | null = null;
 
+/** A validation that is currently running; shared so concurrent callers
+ * (startup warm-up + resource page mount) don't each spawn python. */
+let statusInflight: Promise<{
+  ffmpeg: FfmpegValidation;
+  python: PythonValidation;
+}> | null = null;
+
 /** Forget cached validation results (e.g. after a config change). */
 export function invalidateBackendStatus(): void {
   statusCache = null;
+}
+
+/**
+ * Full python/ffmpeg validation details, cached per config.
+ * `refresh` re-runs the validation (updates the cache); otherwise the cached
+ * result is returned — the cache is filled once at app startup (see main.ts).
+ * Concurrent calls share a single running validation.
+ */
+export async function getBackendStatusDetails(refresh = false): Promise<{
+  ffmpeg: FfmpegValidation;
+  python: PythonValidation;
+}> {
+  const config = readConfig();
+  const key = `${config.ffmpegPath}\u0000${config.pythonPath}`;
+  if (refresh || !statusCache || statusCache.key !== key) {
+    if (!statusInflight) {
+      statusInflight = (async () => {
+        try {
+          statusCache = {
+            key,
+            python: config.pythonPath
+              ? await validatePython(config.pythonPath)
+              : { ok: false, error: '未配置 Python 解释器路径' },
+            ffmpeg: config.ffmpegPath
+              ? await validateFfmpeg(config.ffmpegPath)
+              : { ok: false, error: '未配置 ffmpeg 路径' },
+          };
+          return {
+            ffmpeg: statusCache.ffmpeg,
+            python: statusCache.python,
+          };
+        } finally {
+          statusInflight = null;
+        }
+      })();
+    }
+    return statusInflight;
+  }
+  return { ffmpeg: statusCache.ffmpeg, python: statusCache.python };
 }
 
 /** Python/ffmpeg availability for auto timing, cached per config. */
 export async function getBackendStatus(): Promise<{
   pythonOk: boolean;
   ffmpegOk: boolean;
-  whisperLanguages: Array<{ code: string; id: number }>;
+  whisperLanguages: string[];
 }> {
-  const config = readConfig();
-  const key = `${config.ffmpegPath}\u0000${config.pythonPath}`;
-  if (!statusCache || statusCache.key !== key) {
-    statusCache = {
-      key,
-      python: config.pythonPath
-        ? await validatePython(config.pythonPath)
-        : { ok: false, error: '未配置 Python 解释器路径' },
-      ffmpeg: config.ffmpegPath
-        ? await validateFfmpeg(config.ffmpegPath)
-        : { ok: false, error: '未配置 ffmpeg 路径' },
-    };
-  }
-  const whisperLanguages = WHISPER_LANGUAGES.map((code) => ({
-    code,
-    id: whisperLanguageId(code) ?? -1,
-  }));
+  const { ffmpeg, python } = await getBackendStatusDetails();
   return {
-    pythonOk: statusCache.python.ok,
-    ffmpegOk: statusCache.ffmpeg.ok,
-    whisperLanguages,
+    pythonOk: python.ok,
+    ffmpegOk: ffmpeg.ok,
+    whisperLanguages: [...WHISPER_LANGUAGES],
   };
 }
 
@@ -302,5 +374,9 @@ export function registerResourcesHandlers(): void {
 
   ipcMain.handle(IPC.RESOURCES_VALIDATE_PYTHON, (_event, pythonPath: string) =>
     validatePython(pythonPath),
+  );
+
+  ipcMain.handle(IPC.RESOURCES_GET_STATUS, (_event, refresh?: boolean) =>
+    getBackendStatusDetails(refresh === true),
   );
 }

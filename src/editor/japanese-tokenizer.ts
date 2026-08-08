@@ -13,11 +13,6 @@ import type { Tokenizer, IpadicFeatures } from 'kuromoji';
 
 // ─── Public types ─────────────────────────────────────────────────
 
-export interface WordResult {
-  surface: string;
-  reading: string;
-}
-
 export interface RubyUnit {
   surface: string;
   readings: string[]; // empty if surface === reading (pure kana, no annotation needed)
@@ -203,24 +198,6 @@ async function ensureTokenizer(): Promise<Tokenizer<IpadicFeatures>> {
 }
 
 // ─── Public API ───────────────────────────────────────────────────
-
-/**
- * Word-level analysis: split sentence into surface+reading pairs.
- * Used by the "日语分词" (non-ruby) feature.
- */
-export async function analyze(sentence: string): Promise<WordResult[] | null> {
-  try {
-    const tok = await ensureTokenizer();
-    const tokens = tok.tokenize(sentence);
-    return tokens.map((t) => ({
-      surface: t.surface_form,
-      reading: t.reading ?? t.surface_form,
-    }));
-  } catch (err) {
-    console.error('[japanese-tokenizer] analyze error:', err);
-    return null;
-  }
-}
 
 /**
  * Ruby-ready analysis: split sentence into RubyUnits with mora-level readings.

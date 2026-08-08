@@ -7,38 +7,6 @@ export interface SerializedTimingState {
   bpmSegments: Array<{ bpm: number; start: number }>;
 }
 
-/** Runtime type guard — validates an unknown value is a valid SerializedTimingState */
-export function isValidTimingData(
-  raw: unknown,
-): raw is Partial<SerializedTimingState> {
-  if (!raw || typeof raw !== 'object') return false;
-  const data = raw as Record<string, unknown>;
-  // audioFilePath: optional string
-  if (
-    data.audioFilePath !== undefined &&
-    typeof data.audioFilePath !== 'string'
-  )
-    return false;
-  // audioMeta: optional object or null
-  if (
-    data.audioMeta !== undefined &&
-    data.audioMeta !== null &&
-    typeof data.audioMeta !== 'object'
-  )
-    return false;
-  // bpmSegments: optional array of { bpm: number, start: number }
-  if (data.bpmSegments !== undefined) {
-    if (!Array.isArray(data.bpmSegments)) return false;
-    for (const seg of data.bpmSegments) {
-      if (!seg || typeof seg !== 'object') return false;
-      const s = seg as Record<string, unknown>;
-      if (typeof s.bpm !== 'number' || typeof s.start !== 'number')
-        return false;
-    }
-  }
-  return true;
-}
-
 function parseAudioMeta(raw: unknown): AudioMeta | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;

@@ -78,19 +78,3 @@ export function buildTimingView(
 
   return result;
 }
-
-export function getBeatPositions(lyrics: Lyrics): number[] {
-  const positions: number[] = [];
-  const beatRefs = lyrics.getBeatRefs();
-
-  beatRefs.forEach((ref) => {
-    const { wordIndex, sylIndex } = ref;
-    const syl = lyrics.words[wordIndex].syllables[sylIndex];
-    if (syl.isSet) {
-      positions.push(syl.time.msec);
-    }
-  });
-
-  positions.sort((a, b) => a - b);
-  return positions;
-}

@@ -10,8 +10,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   getResourceConfig,
+  getBackendStatus,
   pythonScriptPath,
-  validatePython,
 } from './resources';
 
 /** Write a mono/stereo float32 PCM WAV file (interleaved). */
@@ -72,9 +72,11 @@ export async function separate(
   if (!config.pythonPath) {
     throw new Error('未配置 Python 解释器路径，请先在「资源配置」中配置');
   }
-  const pythonCheck = await validatePython(config.pythonPath);
-  if (!pythonCheck.ok) {
-    throw new Error(`Python 不可用：${pythonCheck.error}`);
+  // reuse the cached backend status so we don't re-spawn python (importing
+  // torch/demucs is slow) — the dialog already validated it
+  const status = await getBackendStatus();
+  if (!status.pythonOk) {
+    throw new Error('Python 环境不可用，请检查「资源配置」');
   }
 
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

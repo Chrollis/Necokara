@@ -9,11 +9,11 @@
 import { spawn } from 'node:child_process';
 import {
   getResourceConfig,
+  getBackendStatus,
   pythonScriptPath,
   validateFfmpeg,
-  validatePython,
 } from './resources';
-import { whisperLanguageCode } from '../shared/whisper-languages';
+import { isWhisperLanguage } from '../shared/whisper-languages';
 import type { WhisperSegment } from '../shared/whisper-types';
 
 export interface AlignResult {
@@ -39,13 +39,13 @@ interface AlignOutput {
  * stable-ts aligns the full lyrics (syllable.reading concat) onto the audio
  * and we return per-char times.
  * @param vocalsPath path to the separated vocals wav
- * @param languageToken whisper language token id (e.g. <|ja|>)
+ * @param languageCode whisper language code (e.g. 'ja')
  * @param clean noise-gate settings for instrumental residue
  * @param lyricsText full lyrics (readingPrompt) to force-align onto the audio
  */
 export async function alignVocal(
   vocalsPath: string,
-  languageToken: number,
+  languageCode: string,
   clean?: { enabled: boolean; threshold: number },
   lyricsText?: string,
   onProgress?: (p: number) => void,
@@ -62,13 +62,18 @@ export async function alignVocal(
   if (!lyricsText) {
     throw new Error('缺少歌词文本，无法进行对齐');
   }
+  if (!isWhisperLanguage(languageCode)) {
+    throw new Error(`不支持的语言代码：${languageCode}`);
+  }
   const ffmpegCheck = await validateFfmpeg(config.ffmpegPath);
   if (!ffmpegCheck.ok) {
     throw new Error(`ffmpeg 不可用：${ffmpegCheck.error}`);
   }
-  const pythonCheck = await validatePython(config.pythonPath);
-  if (!pythonCheck.ok) {
-    throw new Error(`Python 不可用：${pythonCheck.error}`);
+  // reuse the cached backend status so we don't re-spawn python (importing
+  // torch/demucs is slow) — the dialog already validated it
+  const status = await getBackendStatus();
+  if (!status.pythonOk) {
+    throw new Error('Python 环境不可用，请检查「资源配置」');
   }
 
   const args = [
@@ -76,7 +81,7 @@ export async function alignVocal(
     '--vocals',
     vocalsPath,
     '--lang',
-    whisperLanguageCode(languageToken),
+    languageCode,
     '--model',
     'base',
     '--ffmpeg',

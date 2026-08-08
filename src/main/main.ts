@@ -247,18 +247,18 @@ function registerProjectHandlers() {
     async (
       _event,
       vocalsPath: string,
-      languageToken: number,
+      languageCode: string,
       clean?: { enabled: boolean; threshold: number },
-      lyricsPrompt?: string,
+      lyricsText?: string,
     ) => {
       // @ts-expect-error dynamic import resolved by webpack
       const { alignVocal } = await import('./whisper');
       try {
         const result = await alignVocal(
           vocalsPath,
-          languageToken,
+          languageCode,
           clean,
-          lyricsPrompt,
+          lyricsText,
           (p: number) => {
             _event.sender.send(IPC.WHISPER_ALIGN_PROGRESS, p);
           },

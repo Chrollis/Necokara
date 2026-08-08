@@ -1,45 +1,232 @@
 //
-// whisper-languages.ts — auto-timing languages + token mapping
-// Necokara auto-timing supports ja/zh/en only. Token ids follow
-// openai/whisper: <|en|>=50259, <|zh|>=50260, <|ja|>=50266.
+// whisper-languages.ts — auto-timing language codes + display names.
+// Language codes follow openai/whisper's official 99-language list (order
+// preserved). Display names are stored per UI language (en + zh) so the app
+// can localize later without touching the code list; English names come from
+// whisper's own LANGUAGES mapping.
 //
 
-export const WHISPER_LANGUAGES = ['ja', 'zh', 'en'] as const;
+/** All whisper language codes, in the official order. */
+export const WHISPER_LANGUAGES: readonly string[] = [
+  'en',
+  'zh',
+  'de',
+  'es',
+  'ru',
+  'ko',
+  'fr',
+  'ja',
+  'pt',
+  'tr',
+  'pl',
+  'ca',
+  'nl',
+  'ar',
+  'sv',
+  'it',
+  'id',
+  'hi',
+  'fi',
+  'vi',
+  'he',
+  'uk',
+  'el',
+  'ms',
+  'cs',
+  'ro',
+  'da',
+  'hu',
+  'ta',
+  'no',
+  'th',
+  'ur',
+  'hr',
+  'bg',
+  'lt',
+  'la',
+  'mi',
+  'ml',
+  'cy',
+  'sk',
+  'te',
+  'fa',
+  'lv',
+  'bn',
+  'sr',
+  'az',
+  'sl',
+  'kn',
+  'et',
+  'mk',
+  'br',
+  'eu',
+  'is',
+  'hy',
+  'ne',
+  'mn',
+  'bs',
+  'kk',
+  'sq',
+  'sw',
+  'gl',
+  'mr',
+  'pa',
+  'si',
+  'km',
+  'sn',
+  'yo',
+  'so',
+  'af',
+  'oc',
+  'ka',
+  'be',
+  'tg',
+  'sd',
+  'gu',
+  'am',
+  'yi',
+  'lo',
+  'uz',
+  'fo',
+  'ht',
+  'ps',
+  'tk',
+  'nn',
+  'mt',
+  'sa',
+  'lb',
+  'my',
+  'bo',
+  'tl',
+  'mg',
+  'as',
+  'tt',
+  'haw',
+  'ln',
+  'ha',
+  'ba',
+  'jw',
+  'su',
+  'yue',
+] as const;
 
 export type WhisperLang = (typeof WHISPER_LANGUAGES)[number];
 
-const LANG_ID: Record<WhisperLang, number> = {
-  en: 50259,
-  zh: 50260,
-  ja: 50266,
+/** Localized display names per language code. */
+const LANG_NAMES: Record<string, { en: string; zh: string }> = {
+  en: { en: 'English', zh: '英语' },
+  zh: { en: 'Chinese', zh: '中文' },
+  de: { en: 'German', zh: '德语' },
+  es: { en: 'Spanish', zh: '西班牙语' },
+  ru: { en: 'Russian', zh: '俄语' },
+  ko: { en: 'Korean', zh: '韩语' },
+  fr: { en: 'French', zh: '法语' },
+  ja: { en: 'Japanese', zh: '日语' },
+  pt: { en: 'Portuguese', zh: '葡萄牙语' },
+  tr: { en: 'Turkish', zh: '土耳其语' },
+  pl: { en: 'Polish', zh: '波兰语' },
+  ca: { en: 'Catalan', zh: '加泰罗尼亚语' },
+  nl: { en: 'Dutch', zh: '荷兰语' },
+  ar: { en: 'Arabic', zh: '阿拉伯语' },
+  sv: { en: 'Swedish', zh: '瑞典语' },
+  it: { en: 'Italian', zh: '意大利语' },
+  id: { en: 'Indonesian', zh: '印度尼西亚语' },
+  hi: { en: 'Hindi', zh: '印地语' },
+  fi: { en: 'Finnish', zh: '芬兰语' },
+  vi: { en: 'Vietnamese', zh: '越南语' },
+  he: { en: 'Hebrew', zh: '希伯来语' },
+  uk: { en: 'Ukrainian', zh: '乌克兰语' },
+  el: { en: 'Greek', zh: '希腊语' },
+  ms: { en: 'Malay', zh: '马来语' },
+  cs: { en: 'Czech', zh: '捷克语' },
+  ro: { en: 'Romanian', zh: '罗马尼亚语' },
+  da: { en: 'Danish', zh: '丹麦语' },
+  hu: { en: 'Hungarian', zh: '匈牙利语' },
+  ta: { en: 'Tamil', zh: '泰米尔语' },
+  no: { en: 'Norwegian', zh: '挪威语' },
+  th: { en: 'Thai', zh: '泰语' },
+  ur: { en: 'Urdu', zh: '乌尔都语' },
+  hr: { en: 'Croatian', zh: '克罗地亚语' },
+  bg: { en: 'Bulgarian', zh: '保加利亚语' },
+  lt: { en: 'Lithuanian', zh: '立陶宛语' },
+  la: { en: 'Latin', zh: '拉丁语' },
+  mi: { en: 'Maori', zh: '毛利语' },
+  ml: { en: 'Malayalam', zh: '马拉雅拉姆语' },
+  cy: { en: 'Welsh', zh: '威尔士语' },
+  sk: { en: 'Slovak', zh: '斯洛伐克语' },
+  te: { en: 'Telugu', zh: '泰卢固语' },
+  fa: { en: 'Persian', zh: '波斯语' },
+  lv: { en: 'Latvian', zh: '拉脱维亚语' },
+  bn: { en: 'Bengali', zh: '孟加拉语' },
+  sr: { en: 'Serbian', zh: '塞尔维亚语' },
+  az: { en: 'Azerbaijani', zh: '阿塞拜疆语' },
+  sl: { en: 'Slovenian', zh: '斯洛文尼亚语' },
+  kn: { en: 'Kannada', zh: '卡纳达语' },
+  et: { en: 'Estonian', zh: '爱沙尼亚语' },
+  mk: { en: 'Macedonian', zh: '马其顿语' },
+  br: { en: 'Breton', zh: '布列塔尼语' },
+  eu: { en: 'Basque', zh: '巴斯克语' },
+  is: { en: 'Icelandic', zh: '冰岛语' },
+  hy: { en: 'Armenian', zh: '亚美尼亚语' },
+  ne: { en: 'Nepali', zh: '尼泊尔语' },
+  mn: { en: 'Mongolian', zh: '蒙古语' },
+  bs: { en: 'Bosnian', zh: '波斯尼亚语' },
+  kk: { en: 'Kazakh', zh: '哈萨克语' },
+  sq: { en: 'Albanian', zh: '阿尔巴尼亚语' },
+  sw: { en: 'Swahili', zh: '斯瓦希里语' },
+  gl: { en: 'Galician', zh: '加利西亚语' },
+  mr: { en: 'Marathi', zh: '马拉地语' },
+  pa: { en: 'Punjabi', zh: '旁遮普语' },
+  si: { en: 'Sinhala', zh: '僧伽罗语' },
+  km: { en: 'Khmer', zh: '高棉语' },
+  sn: { en: 'Shona', zh: '绍纳语' },
+  yo: { en: 'Yoruba', zh: '约鲁巴语' },
+  so: { en: 'Somali', zh: '索马里语' },
+  af: { en: 'Afrikaans', zh: '南非荷兰语' },
+  oc: { en: 'Occitan', zh: '奥克语' },
+  ka: { en: 'Georgian', zh: '格鲁吉亚语' },
+  be: { en: 'Belarusian', zh: '白俄罗斯语' },
+  tg: { en: 'Tajik', zh: '塔吉克语' },
+  sd: { en: 'Sindhi', zh: '信德语' },
+  gu: { en: 'Gujarati', zh: '古吉拉特语' },
+  am: { en: 'Amharic', zh: '阿姆哈拉语' },
+  yi: { en: 'Yiddish', zh: '意第绪语' },
+  lo: { en: 'Lao', zh: '老挝语' },
+  uz: { en: 'Uzbek', zh: '乌兹别克语' },
+  fo: { en: 'Faroese', zh: '法罗语' },
+  ht: { en: 'Haitian Creole', zh: '海地克里奥尔语' },
+  ps: { en: 'Pashto', zh: '普什图语' },
+  tk: { en: 'Turkmen', zh: '土库曼语' },
+  nn: { en: 'Nynorsk', zh: '新挪威语' },
+  mt: { en: 'Maltese', zh: '马耳他语' },
+  sa: { en: 'Sanskrit', zh: '梵语' },
+  lb: { en: 'Luxembourgish', zh: '卢森堡语' },
+  my: { en: 'Myanmar', zh: '缅甸语' },
+  bo: { en: 'Tibetan', zh: '藏语' },
+  tl: { en: 'Tagalog', zh: '他加禄语' },
+  mg: { en: 'Malagasy', zh: '马达加斯加语' },
+  as: { en: 'Assamese', zh: '阿萨姆语' },
+  tt: { en: 'Tatar', zh: '鞑靼语' },
+  haw: { en: 'Hawaiian', zh: '夏威夷语' },
+  ln: { en: 'Lingala', zh: '林加拉语' },
+  ha: { en: 'Hausa', zh: '豪萨语' },
+  ba: { en: 'Bashkir', zh: '巴什基尔语' },
+  jw: { en: 'Javanese', zh: '爪哇语' },
+  su: { en: 'Sundanese', zh: '巽他语' },
+  yue: { en: 'Cantonese', zh: '粤语' },
 };
 
-const ID_TO_LANG: Record<number, WhisperLang> = {
-  50259: 'en',
-  50260: 'zh',
-  50266: 'ja',
-};
-
-/** Language code for a whisper language token id. */
-export function whisperLanguageCode(token: number): WhisperLang {
-  return ID_TO_LANG[token] ?? 'ja';
+/** Display name for a language code in the given UI language (fallback en). */
+export function whisperLangName(
+  code: string,
+  uiLang: 'zh' | 'en' = 'zh',
+): string {
+  const names = LANG_NAMES[code];
+  if (!names) return code;
+  return names[uiLang] ?? names.en ?? code;
 }
 
-/** Language token id for a code, or null if not supported. */
-export function whisperLanguageId(code: string): number | null {
-  return LANG_ID[code as WhisperLang] ?? null;
-}
-
-/** Chinese display name for a language code. */
-export function whisperLangName(code: string): string {
-  switch (code) {
-    case 'ja':
-      return '日语';
-    case 'zh':
-      return '中文';
-    case 'en':
-      return '英语';
-    default:
-      return code;
-  }
+/** Whether a code is in the supported whisper language list. */
+export function isWhisperLanguage(code: string): boolean {
+  return (WHISPER_LANGUAGES as readonly string[]).includes(code);
 }

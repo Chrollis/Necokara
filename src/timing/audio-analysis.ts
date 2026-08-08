@@ -43,7 +43,7 @@ export interface SeparateResult {
 export interface AutoTimingCheckResult {
   pythonOk: boolean;
   ffmpegOk: boolean;
-  whisperLanguages: Array<{ code: string; id: number }>;
+  whisperLanguages: string[];
 }
 
 /**
@@ -79,13 +79,14 @@ export async function separateVocals(
 
 /**
  * Force-align separated vocals to the user's lyrics in the main process.
+ * @param languageCode whisper language code (e.g. 'ja')
  * @param clean optional noise-gate settings for instrumental residue
  * @param lyricsText full lyrics (syllable.reading concat) to force-align
  * @returns timestamped segments + per-lyric-char times (charTimesMap)
  */
 export async function alignVocals(
   vocalsPath: string,
-  languageToken: number,
+  languageCode: string,
   lyricsText: string,
   clean?: { enabled: boolean; threshold: number },
   onProgress?: (p: number) => void,
@@ -105,7 +106,7 @@ export async function alignVocals(
   const res = (await window.electron.ipcRenderer.invoke(
     IPC.WHISPER_ALIGN,
     vocalsPath,
-    languageToken,
+    languageCode,
     clean,
     lyricsText,
   )) as

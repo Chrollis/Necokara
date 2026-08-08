@@ -59,7 +59,7 @@ export interface IpcChannelMap {
   'whisper:align': {
     args: [
       vocalsPath: string,
-      languageToken: number,
+      languageCode: string,
       clean?: { enabled: boolean; threshold: number },
     ];
     result:
@@ -116,6 +116,13 @@ export interface IpcChannelMap {
     args: [pythonPath: string];
     result: PythonValidation;
   };
+  'resources:getStatus': {
+    args: [refresh?: boolean];
+    result: {
+      ffmpeg: FfmpegValidation;
+      python: PythonValidation;
+    };
+  };
 }
 
 /** External dependency settings (user-provided paths). */
@@ -136,17 +143,12 @@ export interface PythonValidation {
   ok: boolean;
   version?: string;
   depsOk?: boolean;
+  /** Installed inference deps (stable-ts / faster-whisper / demucs / numpy),
+   * each with its version — set when validation succeeds. */
+  deps?: Array<{ name: string; version: string }>;
+  /** Names of the deps that failed to import — set when validation fails. */
+  missingDeps?: string[];
   error?: string;
-}
-
-/** Type-safe invoke helper — maps channel name to its args/result types. */
-export async function ipcInvoke<TChannel extends keyof IpcChannelMap>(
-  channel: TChannel,
-  ...args: IpcChannelMap[TChannel]['args']
-): Promise<IpcChannelMap[TChannel]['result']> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const w = window as any;
-  return w.electron?.ipcRenderer.invoke(channel, ...args);
 }
 
 const IPC = {
@@ -172,6 +174,7 @@ const IPC = {
   RESOURCES_PICK_FILE: 'resources:pickFile' as const,
   RESOURCES_VALIDATE_FFMPEG: 'resources:validateFfmpeg' as const,
   RESOURCES_VALIDATE_PYTHON: 'resources:validatePython' as const,
+  RESOURCES_GET_STATUS: 'resources:getStatus' as const,
   LOG: 'log:message' as const,
   UPDATE_AVAILABLE: 'update:available' as const,
   UPDATE_NOT_AVAILABLE: 'update:not-available' as const,
@@ -180,21 +183,5 @@ const IPC = {
   UPDATE_DOWNLOADED: 'update:downloaded' as const,
   UPDATE_INSTALL: 'update:install' as const,
 };
-
-/** Serializable wrapper for Float32Array over IPC. */
-export interface FloatArrayData {
-  type: 'Float32Array';
-  data: number[];
-}
-
-/** Encode a Float32Array into a plain object for IPC serialization. */
-export function encodeFloatArray(arr: Float32Array): FloatArrayData {
-  return { type: 'Float32Array', data: Array.from(arr) };
-}
-
-/** Decode a FloatArrayData back into a Float32Array. */
-export function decodeFloatArray(obj: FloatArrayData): Float32Array {
-  return new Float32Array(obj.data);
-}
 
 export default IPC;

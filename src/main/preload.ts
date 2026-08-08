@@ -37,6 +37,9 @@ const electronHandler = {
     validatePython(pythonPath: string) {
       return ipcRenderer.invoke(IPC.RESOURCES_VALIDATE_PYTHON, pythonPath);
     },
+    getStatus(refresh?: boolean) {
+      return ipcRenderer.invoke(IPC.RESOURCES_GET_STATUS, refresh);
+    },
   },
   fs: {
     readTextFile(relativePath: string) {
