@@ -64,20 +64,11 @@ export interface IpcChannelMap {
     ];
     result:
       | {
+          charTimes?: Record<string, number>;
           segments: Array<{
             start: number;
             end: number;
             text: string;
-            tokens: number[];
-            /** per-token cross-attention (word timestamps), when the model
-             * exposes it; may be null/undefined over IPC for old models */
-            crossAttn?: Float32Array | number[] | null;
-            wordTimes?: Array<{
-              start: number;
-              end: number;
-              text: string;
-            }> | null;
-            windowOffset?: number;
           }>;
         }
       | { error: string }
@@ -121,16 +112,16 @@ export interface IpcChannelMap {
     args: [ffmpegPath: string];
     result: FfmpegValidation;
   };
-  'resources:inspectModelDir': {
-    args: [dir: string];
-    result: ModelDirInspection;
+  'resources:validatePython': {
+    args: [pythonPath: string];
+    result: PythonValidation;
   };
 }
 
 /** External dependency settings (user-provided paths). */
 export interface ResourceConfig {
-  modelDir: string;
   ffmpegPath: string;
+  pythonPath: string;
 }
 
 /** Result of running `ffmpeg -version`. */
@@ -140,21 +131,12 @@ export interface FfmpegValidation {
   error?: string;
 }
 
-/** Inspection of a model directory: existence + structure + interface issues. */
-export interface ModelDirIssue {
-  severity: 'error' | 'warn';
-  message: string;
-}
-
-export interface ModelDirInspection {
-  exists: boolean;
-  onnxFiles: string[];
-  /** resolved separate model file (absolute), or null */
-  separateModel: string | null;
-  /** whisper model dir (absolute), or null */
-  whisperModel: string | null;
-  /** structural / interface issues (empty = OK) */
-  issues: ModelDirIssue[];
+/** Result of checking the Python interpreter (version + required deps import). */
+export interface PythonValidation {
+  ok: boolean;
+  version?: string;
+  depsOk?: boolean;
+  error?: string;
 }
 
 /** Type-safe invoke helper — maps channel name to its args/result types. */
@@ -189,7 +171,7 @@ const IPC = {
   RESOURCES_PICK_DIRECTORY: 'resources:pickDirectory' as const,
   RESOURCES_PICK_FILE: 'resources:pickFile' as const,
   RESOURCES_VALIDATE_FFMPEG: 'resources:validateFfmpeg' as const,
-  RESOURCES_INSPECT_MODEL_DIR: 'resources:inspectModelDir' as const,
+  RESOURCES_VALIDATE_PYTHON: 'resources:validatePython' as const,
   LOG: 'log:message' as const,
   UPDATE_AVAILABLE: 'update:available' as const,
   UPDATE_NOT_AVAILABLE: 'update:not-available' as const,

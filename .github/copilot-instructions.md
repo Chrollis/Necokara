@@ -19,7 +19,16 @@
 - **不要用 PowerShell 批量处理文件** — 会导致中文编码损坏。
 - **不要直接操作 DOM**，使用 React 的声明式方式。
 - **不要**在主进程中直接 import 渲染进程的代码（反之亦然）。
+- 及时清理**死代码**参与，适时和用户讨论**重构**重复代码等问题。
 - 使用**英语**作为**注释**语言和辅助脚本**输出**语言（不是软件本体中的脚本）。
+
+## 自动打轴链路（whisper 对齐）
+
+- **后端**: `python/align.py` 用 stable-ts `model.align()` 把**完整歌词文本**强制对齐到人声。歌词文本 = `Lyrics.readingPrompt()`（所有 syllable.reading 拼接，含空格/换行/标点）
+- **输出**: `charTimes`（键 = 原始 readingPrompt 字符偏移，值 = 对齐秒数）+ `segments`（`{start,end,text}`）。字符↔syllable 1:1 映射已实测成立（BPE encode/decode 无损往返）
+- **映射**: 渲染侧 `applyCharTimesMap()` 按 readingPrompt 偏移重建 owner 表，每个 syllable 取**首字符**时间，单调 clamp；空白/换行/标点时间不依赖 whisper，由 `inferSeparatorTimes()` + `scanAllPunctuations()` 推断
+- **不要**为 whisper 传关键词/提示词做条件化 —— `model.align()` 是歌词驱动的强制对齐，直接传完整 readingPrompt
+- stable-ts 对日语按 BPE token 粒度切词（`split_words_by_space=False`），返回的词比我们的 syllable 更细/更粗/跨词都可能，统一由字符偏移映射兜底，不需要也不要去改它的分词
 
 ## 版本号约定
 

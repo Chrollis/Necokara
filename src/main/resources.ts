@@ -11,12 +11,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import IPC, {
   FfmpegValidation,
-  ModelDirInspection,
-  ModelDirIssue,
+  PythonValidation,
   ResourceConfig,
 } from '../shared/ipc';
+import {
+  WHISPER_LANGUAGES,
+  whisperLanguageId,
+} from '../shared/whisper-languages';
 
-const DEFAULT_CONFIG: ResourceConfig = { modelDir: '', ffmpegPath: '' };
+const DEFAULT_CONFIG: ResourceConfig = { ffmpegPath: '', pythonPath: '' };
 
 function configFilePath(): string {
   return path.join(app.getPath('userData'), 'settings.json');
@@ -27,9 +30,10 @@ function readConfig(): ResourceConfig {
     const raw = fs.readFileSync(configFilePath(), 'utf-8');
     const parsed = JSON.parse(raw) as Partial<ResourceConfig>;
     return {
-      modelDir: typeof parsed.modelDir === 'string' ? parsed.modelDir : '',
       ffmpegPath:
         typeof parsed.ffmpegPath === 'string' ? parsed.ffmpegPath : '',
+      pythonPath:
+        typeof parsed.pythonPath === 'string' ? parsed.pythonPath : '',
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -54,65 +58,15 @@ export function getResourceConfig(): ResourceConfig {
   return readConfig();
 }
 
-/**
- * 在模型目录下查找人声分离模型（约定：`separate/*.onnx` 优先，
- * 其次根目录任意 `.onnx`）。返回绝对路径或 null。
- */
-export function findSeparateModel(modelDir: string): string | null {
-  if (!modelDir) return null;
-  const candidates: string[] = [];
-  try {
-    const sepDir = path.join(modelDir, 'separate');
-    if (fs.existsSync(sepDir) && fs.statSync(sepDir).isDirectory()) {
-      for (const name of fs.readdirSync(sepDir)) {
-        if (name.toLowerCase().endsWith('.onnx')) {
-          candidates.push(path.join(sepDir, name));
-        }
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  if (candidates.length === 0) {
-    try {
-      for (const name of fs.readdirSync(modelDir)) {
-        if (name.toLowerCase().endsWith('.onnx')) {
-          candidates.push(path.join(modelDir, name));
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  candidates.sort((a, b) => a.localeCompare(b));
-  return candidates[0] ?? null;
+/** Absolute path to a python backend script (python/*.py) in this app. */
+export function pythonScriptPath(name: string): string {
+  const base = app.isPackaged
+    ? path.join(process.resourcesPath, 'python')
+    : path.join(app.getAppPath(), 'python');
+  return path.join(base, name);
 }
 
-/**
- * 在模型目录下查找 whisper 对齐模型（约定：`whisper/onnx/encoder_model.onnx` +
- * `decoder_model.onnx` + `decoder_with_past_model.onnx` + `whisper/vocab.json` +
- * `whisper/tokenizer.json`）。返回 `whisper` 目录绝对路径或 null。
- */
-export function findWhisperModel(modelDir: string): string | null {
-  if (!modelDir) return null;
-  const whisperDir = path.join(modelDir, 'whisper');
-  const onnxDir = path.join(whisperDir, 'onnx');
-  try {
-    const needed = [
-      path.join(onnxDir, 'encoder_model.onnx'),
-      path.join(onnxDir, 'decoder_model.onnx'),
-      path.join(onnxDir, 'decoder_with_past_model.onnx'),
-      path.join(whisperDir, 'vocab.json'),
-      path.join(whisperDir, 'tokenizer.json'),
-    ];
-    if (needed.every((f) => fs.existsSync(f))) return whisperDir;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-function ffmpegSpawnErrorMessage(err: {
+function spawnErrorMessage(err: {
   code?: string | number | null;
   message?: string;
 }): string {
@@ -160,7 +114,7 @@ export function validateFfmpeg(ffmpegPath: string): Promise<FfmpegValidation> {
         { timeout: 10000, windowsHide: true },
         (err, stdout) => {
           if (err) {
-            resolve({ ok: false, error: ffmpegSpawnErrorMessage(err) });
+            resolve({ ok: false, error: spawnErrorMessage(err) });
             return;
           }
           const firstLine = (stdout || '').split(/\r?\n/)[0]?.trim() ?? '';
@@ -186,7 +140,7 @@ export function validateFfmpeg(ffmpegPath: string): Promise<FfmpegValidation> {
     } catch (err) {
       resolve({
         ok: false,
-        error: ffmpegSpawnErrorMessage(
+        error: spawnErrorMessage(
           err as { code?: string | number | null; message?: string },
         ),
       });
@@ -194,250 +148,118 @@ export function validateFfmpeg(ffmpegPath: string): Promise<FfmpegValidation> {
   });
 }
 
-// onnx metadata interface checks (load session once per path, no inference)
-const interfaceChecked = new Set<string>();
-
-function loadOnnx(): any {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
-  return eval('require')('onnxruntime-node');
-}
-
-async function checkSeparateInterface(
-  modelPath: string,
-  issues: ModelDirIssue[],
-): Promise<void> {
-  if (interfaceChecked.has(modelPath)) return;
-  interfaceChecked.add(modelPath);
-  try {
-    const ort = loadOnnx();
-    const s = await ort.InferenceSession.create(modelPath, {
-      executionProviders: ['cpu'],
-    });
-    const inp = s.inputMetadata[0];
-    const dims = inp ? (inp.shape as number[]) : [];
-    if (dims.length !== 4 || dims[1] !== 4) {
-      issues.push({
-        severity: 'error',
-        message: `分离模型接口不符（期望输入 [1,4,3072,256]，实际 [${dims.join(',')}]）`,
+export function validatePython(pythonPath: string): Promise<PythonValidation> {
+  return new Promise((resolve) => {
+    if (!pythonPath) {
+      resolve({ ok: false, error: '未配置 Python 解释器路径' });
+      return;
+    }
+    if (!fs.existsSync(pythonPath)) {
+      resolve({ ok: false, error: '文件不存在' });
+      return;
+    }
+    let stat;
+    try {
+      stat = fs.statSync(pythonPath);
+    } catch {
+      resolve({ ok: false, error: '无法访问该路径' });
+      return;
+    }
+    if (stat.isDirectory()) {
+      resolve({
+        ok: false,
+        error: '所选路径是文件夹，请选择 python 可执行文件',
       });
+      return;
     }
-  } catch (e) {
-    issues.push({
-      severity: 'error',
-      message: `分离模型无法加载：${e instanceof Error ? e.message : String(e)}`,
-    });
-  }
-}
-
-async function checkWhisperInterface(
-  wOnnxDir: string,
-  issues: ModelDirIssue[],
-): Promise<void> {
-  if (interfaceChecked.has(wOnnxDir)) return;
-  interfaceChecked.add(wOnnxDir);
-  try {
-    const ort = loadOnnx();
-    const enc = await ort.InferenceSession.create(
-      path.join(wOnnxDir, 'encoder_model.onnx'),
-      { executionProviders: ['cpu'] },
-    );
-    const encIn = enc.inputMetadata[0];
-    if (encIn && encIn.name !== 'input_features') {
-      issues.push({
-        severity: 'error',
-        message: `whisper encoder 输入名应为 input_features（实际 ${encIn.name}）`,
-      });
-    }
-    const dec = await ort.InferenceSession.create(
-      path.join(wOnnxDir, 'decoder_model.onnx'),
-      { executionProviders: ['cpu'] },
-    );
-    const names = dec.inputMetadata.map((m: { name: string }) => m.name);
-    if (
-      !names.includes('input_ids') ||
-      !names.includes('encoder_hidden_states')
-    ) {
-      issues.push({
-        severity: 'error',
-        message: 'whisper decoder 输入应为 input_ids + encoder_hidden_states',
-      });
-    }
-    // KV-cache incremental decoder (decoder_with_past_model.onnx): must accept
-    // past_key_values.* inputs for incremental decoding to work.
-    const past = await ort.InferenceSession.create(
-      path.join(wOnnxDir, 'decoder_with_past_model.onnx'),
-      { executionProviders: ['cpu'] },
-    );
-    const pastNames: string[] = past.inputMetadata.map(
-      (m: { name: string }) => m.name,
-    );
-    if (!pastNames.some((n: string) => n.startsWith('past_key_values.'))) {
-      issues.push({
-        severity: 'error',
-        message:
-          'whisper decoder_with_past 应包含 past_key_values.* 输入（KV 增量解码需要）',
-      });
-    }
-  } catch (e) {
-    issues.push({
-      severity: 'error',
-      message: `whisper 模型无法加载：${e instanceof Error ? e.message : String(e)}`,
-    });
-  }
-}
-
-export async function inspectModelDir(
-  dir: string,
-): Promise<ModelDirInspection> {
-  const issues: ModelDirIssue[] = [];
-  const onnxFiles: string[] = [];
-  if (!dir) {
-    return {
-      exists: false,
-      onnxFiles: [],
-      separateModel: null,
-      whisperModel: null,
-      issues: [{ severity: 'error', message: '未设置模型目录' }],
-    };
-  }
-
-  let exists = false;
-  try {
-    exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
-  } catch {
-    exists = false;
-  }
-  if (!exists) {
-    return {
-      exists: false,
-      onnxFiles: [],
-      separateModel: null,
-      whisperModel: null,
-      issues: [{ severity: 'error', message: '目录不存在' }],
-    };
-  }
-
-  // recursive onnx scan (relative paths, e.g. separate/UVR-MDX-NET_Main_438.onnx)
-  try {
-    const walk = (cur: string, rel: string, depth: number) => {
-      if (depth > 5) return;
-      for (const name of fs.readdirSync(cur)) {
-        const full = path.join(cur, name);
-        let stat;
-        try {
-          stat = fs.statSync(full);
-        } catch {
-          continue;
-        }
-        if (stat.isDirectory()) {
-          walk(full, rel ? `${rel}/${name}` : name, depth + 1);
-        } else if (name.toLowerCase().endsWith('.onnx')) {
-          onnxFiles.push(rel ? `${rel}/${name}` : name);
-        }
-      }
-    };
-    walk(dir, '', 0);
-    onnxFiles.sort((a, b) => a.localeCompare(b));
-  } catch {
-    /* ignore */
-  }
-
-  // separate model: only ONE allowed under separate/
-  let separateModel: string | null = null;
-  const sepDir = path.join(dir, 'separate');
-  let sepOnnx: string[] = [];
-  try {
-    if (fs.existsSync(sepDir) && fs.statSync(sepDir).isDirectory()) {
-      sepOnnx = fs
-        .readdirSync(sepDir)
-        .filter((n) => n.toLowerCase().endsWith('.onnx'));
-    }
-  } catch {
-    /* ignore */
-  }
-  if (sepOnnx.length > 0) {
-    if (sepOnnx.length > 1) {
-      issues.push({
-        severity: 'error',
-        message: `separate/ 下只能有一个分离模型（找到 ${sepOnnx.length} 个）`,
-      });
-    }
-    separateModel = path.join(sepDir, sepOnnx[0]);
-  } else {
-    // fallback: a single onnx at the root
-    const rootOnnx = onnxFiles.filter((f) => !f.includes('/'));
-    if (rootOnnx.length > 0) {
-      if (rootOnnx.length > 1) {
-        issues.push({
-          severity: 'error',
-          message: `根目录存在多个 .onnx（${rootOnnx.length} 个），无法确定分离模型`,
-        });
-      }
-      separateModel = path.join(dir, rootOnnx[0]);
-    } else {
-      issues.push({
-        severity: 'error',
-        message: '未找到分离模型（期望 separate/*.onnx）',
-      });
-    }
-  }
-
-  // whisper model: fixed file layout, only ONE onnx pair
-  const whisperDir = path.join(dir, 'whisper');
-  const wOnnxDir = path.join(whisperDir, 'onnx');
-  let whisperModel: string | null = null;
-  try {
-    if (fs.existsSync(whisperDir) && fs.statSync(whisperDir).isDirectory()) {
-      const required: Array<[string, string]> = [
-        ['encoder_model.onnx', path.join(wOnnxDir, 'encoder_model.onnx')],
-        ['decoder_model.onnx', path.join(wOnnxDir, 'decoder_model.onnx')],
-        [
-          'decoder_with_past_model.onnx',
-          path.join(wOnnxDir, 'decoder_with_past_model.onnx'),
-        ],
-        ['vocab.json', path.join(whisperDir, 'vocab.json')],
-        ['tokenizer.json', path.join(whisperDir, 'tokenizer.json')],
-      ];
-      const missing = required
-        .filter(([, p]) => !fs.existsSync(p))
-        .map(([n]) => n);
-      if (missing.length > 0) {
-        issues.push({
-          severity: 'error',
-          message: `whisper/ 缺少必需文件：${missing.join('、')}`,
-        });
-      } else {
-        whisperModel = whisperDir;
-        if (fs.existsSync(wOnnxDir) && fs.statSync(wOnnxDir).isDirectory()) {
-          const variants = fs
-            .readdirSync(wOnnxDir)
-            .filter((n) => n.toLowerCase().endsWith('.onnx'));
-          const known = [
-            'encoder_model.onnx',
-            'decoder_model.onnx',
-            'decoder_with_past_model.onnx',
-          ];
-          const extras = variants.filter((n) => !known.includes(n));
-          if (extras.length > 0) {
-            issues.push({
-              severity: 'warn',
-              message: `whisper/onnx/ 有额外模型变体（${extras.join('、')}），建议只保留 encoder_model.onnx + decoder_model.onnx + decoder_with_past_model.onnx`,
-            });
+    // One-shot probe: import the required inference deps + print the version.
+    // If any dep is missing the process exits non-zero and stderr mentions it.
+    const probe = [
+      '-c',
+      'import sys, stable_whisper, faster_whisper, demucs, numpy; print("NECO_PY_OK", sys.version.split()[0])',
+    ];
+    try {
+      execFile(
+        pythonPath,
+        probe,
+        { timeout: 20000, windowsHide: true, encoding: 'utf8' },
+        (err, stdout, stderr) => {
+          if (err) {
+            const text = `${stderr || ''}${stdout || ''}`;
+            if (/No module named|ModuleNotFoundError/.test(text)) {
+              resolve({
+                ok: false,
+                error:
+                  '缺少依赖（stable-ts / faster-whisper / demucs / numpy），请先运行 python\\conda-env.bat 安装环境',
+              });
+              return;
+            }
+            resolve({ ok: false, error: spawnErrorMessage(err) });
+            return;
           }
-        }
-      }
-    } else {
-      issues.push({ severity: 'error', message: '未找到 whisper/ 模型目录' });
+          const m = /NECO_PY_OK\s+(\S+)/.exec(stdout || '');
+          if (!m) {
+            resolve({ ok: false, error: '无法解析 Python 版本' });
+            return;
+          }
+          resolve({ ok: true, version: `Python ${m[1]}`, depsOk: true });
+        },
+      );
+    } catch (err) {
+      resolve({
+        ok: false,
+        error: spawnErrorMessage(
+          err as { code?: string | number | null; message?: string },
+        ),
+      });
     }
-  } catch {
-    /* ignore */
+  });
+}
+
+// ── Cached backend status ───────────────────────────────────────────────
+// Validated lazily and cached by config key, so opening the auto-timing
+// dialog doesn't re-spawn python (importing torch is slow). Invalidated on
+// config change; warmed up once at app startup.
+
+let statusCache: {
+  key: string;
+  python: PythonValidation;
+  ffmpeg: FfmpegValidation;
+} | null = null;
+
+/** Forget cached validation results (e.g. after a config change). */
+export function invalidateBackendStatus(): void {
+  statusCache = null;
+}
+
+/** Python/ffmpeg availability for auto timing, cached per config. */
+export async function getBackendStatus(): Promise<{
+  pythonOk: boolean;
+  ffmpegOk: boolean;
+  whisperLanguages: Array<{ code: string; id: number }>;
+}> {
+  const config = readConfig();
+  const key = `${config.ffmpegPath}\u0000${config.pythonPath}`;
+  if (!statusCache || statusCache.key !== key) {
+    statusCache = {
+      key,
+      python: config.pythonPath
+        ? await validatePython(config.pythonPath)
+        : { ok: false, error: '未配置 Python 解释器路径' },
+      ffmpeg: config.ffmpegPath
+        ? await validateFfmpeg(config.ffmpegPath)
+        : { ok: false, error: '未配置 ffmpeg 路径' },
+    };
   }
-
-  // onnx interface checks (load metadata)
-  if (separateModel) await checkSeparateInterface(separateModel, issues);
-  if (whisperModel) await checkWhisperInterface(wOnnxDir, issues);
-
-  return { exists, onnxFiles, separateModel, whisperModel, issues };
+  const whisperLanguages = WHISPER_LANGUAGES.map((code) => ({
+    code,
+    id: whisperLanguageId(code) ?? -1,
+  }));
+  return {
+    pythonOk: statusCache.python.ok,
+    ffmpegOk: statusCache.ffmpeg.ok,
+    whisperLanguages,
+  };
 }
 
 export function registerResourcesHandlers(): void {
@@ -445,12 +267,13 @@ export function registerResourcesHandlers(): void {
 
   ipcMain.handle(IPC.RESOURCES_SET_CONFIG, (_event, config: ResourceConfig) => {
     const merged: ResourceConfig = {
-      modelDir:
-        typeof config?.modelDir === 'string' ? config.modelDir.trim() : '',
       ffmpegPath:
         typeof config?.ffmpegPath === 'string' ? config.ffmpegPath.trim() : '',
+      pythonPath:
+        typeof config?.pythonPath === 'string' ? config.pythonPath.trim() : '',
     };
     writeConfig(merged);
+    invalidateBackendStatus();
     return merged;
   });
 
@@ -477,7 +300,7 @@ export function registerResourcesHandlers(): void {
     validateFfmpeg(ffmpegPath),
   );
 
-  ipcMain.handle(IPC.RESOURCES_INSPECT_MODEL_DIR, (_event, dir: string) =>
-    inspectModelDir(dir),
+  ipcMain.handle(IPC.RESOURCES_VALIDATE_PYTHON, (_event, pythonPath: string) =>
+    validatePython(pythonPath),
   );
 }

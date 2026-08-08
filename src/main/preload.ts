@@ -34,8 +34,8 @@ const electronHandler = {
     validateFfmpeg(ffmpegPath: string) {
       return ipcRenderer.invoke(IPC.RESOURCES_VALIDATE_FFMPEG, ffmpegPath);
     },
-    inspectModelDir(dir: string) {
-      return ipcRenderer.invoke(IPC.RESOURCES_INSPECT_MODEL_DIR, dir);
+    validatePython(pythonPath: string) {
+      return ipcRenderer.invoke(IPC.RESOURCES_VALIDATE_PYTHON, pythonPath);
     },
   },
   fs: {
@@ -88,10 +88,8 @@ const electronHandler = {
       return ipcRenderer.invoke('window:isMaximized');
     },
     onMaximizedChange(callback: (maximized: boolean) => void) {
-      const sub = (
-        _event: Electron.IpcRendererEvent,
-        maximized: boolean,
-      ) => callback(maximized);
+      const sub = (_event: Electron.IpcRendererEvent, maximized: boolean) =>
+        callback(maximized);
       ipcRenderer.on('window:maximized-changed', sub);
       return () => ipcRenderer.removeListener('window:maximized-changed', sub);
     },

@@ -4,7 +4,7 @@
  * BPM detection runs in the main process via IPC (pleco worker).
  */
 import type { BpmSegment } from './types';
-import type { WhisperSegment } from './whisper/transcribe';
+import type { WhisperSegment } from '../shared/whisper-types';
 import IPC from '../shared/ipc';
 
 export interface RhythmResult {
@@ -41,8 +41,8 @@ export interface SeparateResult {
 }
 
 export interface AutoTimingCheckResult {
-  separateModelOk: boolean;
-  whisperModelOk: boolean;
+  pythonOk: boolean;
+  ffmpegOk: boolean;
   whisperLanguages: Array<{ code: string; id: number }>;
 }
 
@@ -78,16 +78,21 @@ export async function separateVocals(
 }
 
 /**
- * Whisper-align separated vocals in the main process (worker thread).
+ * Force-align separated vocals to the user's lyrics in the main process.
  * @param clean optional noise-gate settings for instrumental residue
- * @returns timestamped segments (with cross-attention word timestamps)
+ * @param lyricsText full lyrics (syllable.reading concat) to force-align
+ * @returns timestamped segments + per-lyric-char times (charTimesMap)
  */
 export async function alignVocals(
   vocalsPath: string,
   languageToken: number,
+  lyricsText: string,
   clean?: { enabled: boolean; threshold: number },
   onProgress?: (p: number) => void,
-): Promise<WhisperSegment[]> {
+): Promise<{
+  segments: WhisperSegment[];
+  charTimesMap?: Record<string, number>;
+}> {
   let unsub: (() => void) | undefined;
   if (onProgress) {
     unsub = window.electron.ipcRenderer.on(
@@ -102,11 +107,21 @@ export async function alignVocals(
     vocalsPath,
     languageToken,
     clean,
-  )) as { segments: WhisperSegment[] } | { error: string } | null;
+    lyricsText,
+  )) as
+    | {
+        segments: WhisperSegment[];
+        charTimesMap?: Record<string, number>;
+      }
+    | { error: string }
+    | null;
   unsub?.();
   if (!res) throw new Error('Alignment returned null');
   if ('error' in res) throw new Error(`Alignment failed: ${res.error}`);
-  return res.segments;
+  return {
+    segments: res.segments,
+    charTimesMap: res.charTimesMap,
+  };
 }
 
 /** Read an audio file into an ArrayBuffer (decoded on the renderer side). */
@@ -134,7 +149,7 @@ export async function getWavInfo(
   return res;
 }
 
-/** Preflight check for auto timing (models + whisper language support). */
+/** Preflight check for auto timing (python + ffmpeg availability). */
 export async function checkAutoTiming(): Promise<AutoTimingCheckResult> {
   const res = (await window.electron.ipcRenderer.invoke(
     IPC.AUTO_TIMING_CHECK,

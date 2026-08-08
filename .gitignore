@@ -2,14 +2,12 @@
 logs
 *.log
 
-# Utils
-models/separate/
-models/whisper/
-ffmpeg/bin/
-ffmpeg/doc/
-ffmpeg/presets/
-ffmpeg/LICENSE
-ffmpeg/README.txt
+# Python inference env
+python/.conda-env/
+python/__pycache__/
+
+# FFmpeg
+ffmpeg/
 
 # Docs
 docs/

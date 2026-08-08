@@ -181,14 +181,20 @@
 
 .tv-time {
   font-family: var(--font-mono);
+  flex: 1;
 }
 
 .tv-beat-info {
   font-family: var(--font-mono);
-  margin-left: auto;
+  flex: 1;
+  text-align: right;
 }
 
-/* ── Auto-timing progress (centered in bottom bar) ── */
+/* ── Auto-timing progress (centered between time & beat columns) ── */
+
+.tv-progress {
+  margin: 0 8px;
+}
 
 .tv-progress-label {
   font-size: 12px;

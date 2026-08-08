@@ -153,6 +153,16 @@
   min-width: 20px;
 }
 
+/* ── Auto-timing language ── */
+
+.align-lang-icon {
+  font-size: 13px;
+  color: var(--mute);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .rem-input {
   flex: 1;
   height: 32px;

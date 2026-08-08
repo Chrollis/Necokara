@@ -1,5 +1,34 @@
 import type { Lyrics } from '../editor/lyrics';
-import { isSeparatorWord, isNewlineWord } from '../editor/word';
+import {
+  isSeparatorWord,
+  isNewlineWord,
+  isPunctuationWord,
+} from '../editor/word';
+
+/**
+ * Scan punctuation times (reverse, one pass). Punctuation has no musical
+ * duration; its time is taken from the nearest following sung/separator word
+ * that already has a time. Walking backwards lets a single pass fill chains
+ * of punctuation regardless of interaction order.
+ */
+export function scanAllPunctuations(lyrics: Lyrics): void {
+  let lastTime = -1;
+  for (let k = lyrics.words.length - 1; k >= 0; k -= 1) {
+    const word = lyrics.words[k];
+    if (isPunctuationWord(word)) {
+      if (lastTime >= 0) {
+        word.syllables.forEach((_, si) => {
+          lyrics.setSyllableTime(k, si, { msec: lastTime });
+        });
+      }
+      continue;
+    }
+    const syl = word.syllables[0];
+    if (syl && syl.isSet) {
+      lastTime = syl.time.msec;
+    }
+  }
+}
 
 export default function inferSeparatorTimes(
   lyrics: Lyrics,

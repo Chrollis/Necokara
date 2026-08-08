@@ -1,6 +1,6 @@
 import type { Word } from './word';
 import type { Time } from './time';
-import { isSeparatorWord, wordSyllableCount } from './word';
+import { isSeparatorWord, isPunctuationWord, wordSyllableCount } from './word';
 import { createTime } from './time';
 
 export interface BeatRef {
@@ -63,12 +63,29 @@ export class Lyrics {
   getBeatRefs(): BeatRef[] {
     const refs: BeatRef[] = [];
     this.words.forEach((word, wordIndex) => {
-      if (isSeparatorWord(word)) return;
+      if (isSeparatorWord(word) || isPunctuationWord(word)) return;
       word.syllables.forEach((_, sylIndex) => {
         refs.push({ wordIndex, sylIndex });
       });
     });
     return refs;
+  }
+
+  /**
+   * Full lyrics text from every syllable's reading (separators become their
+   * literal space/newline). Used as the whisper conditioning prompt so the
+   * model is anchored to the intended text.
+   */
+  readingPrompt(): string {
+    let out = '';
+    for (const word of this.words) {
+      if (isSeparatorWord(word)) {
+        out += word.reading; // ' ' or '\n'
+        continue;
+      }
+      for (const syl of word.syllables) out += syl.reading;
+    }
+    return out;
   }
 
   getBeatCount(): number {

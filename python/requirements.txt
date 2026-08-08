@@ -1,0 +1,20 @@
+# python/requirements.txt — Necokara Python inference dependencies
+#
+# Install (Windows, conda env):
+#   python\.conda-env\python.exe -m pip install -r python\requirements.txt
+#
+# For CN networks, set mirrors first — see python/README.md and python/conda-env.bat
+#
+# --- Transcription + word-level timestamps ---
+# stable-ts (import name: stable_whisper): stable word-level timestamps; can
+# load faster-whisper's CTranslate2 backend via load_faster_whisper()
+stable-ts>=2.19.0
+# faster-whisper: CTranslate2 inference backend (CUDA/CPU); used by stable-ts
+faster-whisper>=1.0.0
+
+# --- Vocal separation ---
+# demucs: Meta's HTDemucs separation (MIT; weights auto-download at runtime)
+demucs>=4.0.0
+
+# --- Audio processing ---
+numpy>=1.26

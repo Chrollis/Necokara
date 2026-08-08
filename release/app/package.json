@@ -13,8 +13,5 @@
     "postinstall": "npm run rebuild && npm run link-modules",
     "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
   },
-  "dependencies": {
-    "@radzivon.bartoshyk/zaft": "^0.3.13",
-    "onnxruntime-node": "^1.27.0"
-  }
+  "dependencies": {}
 }

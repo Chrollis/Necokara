@@ -47,6 +47,21 @@ export function isSeparatorSyllable(syl: Syllable): boolean {
   return isSpaceSyllable(syl) || isNewlineSyllable(syl);
 }
 
+/** CJK / latin punctuation characters (no musical duration). `ー` (choonpu,
+ * extends the previous kana) is ordinary text (it has duration); `～`/`~` and
+ * `・` (nakaguro) are soundless decorations → punctuation. */
+const PUNCTUATION_CHARS = '「」『』（）、。！？…・～~,.;:!?"\'';
+
+/** Whether a single character is punctuation. */
+export function isPunctuationChar(ch: string): boolean {
+  return PUNCTUATION_CHARS.includes(ch);
+}
+
+/** Whether a syllable is punctuation (every char is punctuation). */
+export function isPunctuationSyllable(syl: Syllable): boolean {
+  return syl.reading.length > 0 && [...syl.reading].every(isPunctuationChar);
+}
+
 export function syllableEquals(a: Syllable, b: Syllable): boolean {
   return (
     a.reading === b.reading &&

@@ -10,13 +10,7 @@ import { resolveHtmlPath } from './util';
 import IPC from '../shared/ipc';
 import { initLogger } from './logger';
 import { initUpdater, setMainWindow } from './updater';
-import {
-  registerResourcesHandlers,
-  getResourceConfig,
-  findSeparateModel,
-  findWhisperModel,
-} from './resources';
-import { WhisperTokenizer } from '../timing/whisper/tokenizer';
+import { registerResourcesHandlers, getBackendStatus } from './resources';
 
 app.setName('Necokara');
 
@@ -255,6 +249,7 @@ function registerProjectHandlers() {
       vocalsPath: string,
       languageToken: number,
       clean?: { enabled: boolean; threshold: number },
+      lyricsPrompt?: string,
     ) => {
       // @ts-expect-error dynamic import resolved by webpack
       const { alignVocal } = await import('./whisper');
@@ -263,12 +258,16 @@ function registerProjectHandlers() {
           vocalsPath,
           languageToken,
           clean,
+          lyricsPrompt,
           (p: number) => {
             _event.sender.send(IPC.WHISPER_ALIGN_PROGRESS, p);
           },
         );
         if (!result) return { error: 'Alignment returned null' };
-        return { segments: result.segments };
+        return {
+          segments: result.segments,
+          charTimesMap: result.charTimesMap,
+        };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[main] whisper alignment error:', err);
@@ -337,35 +336,9 @@ function registerProjectHandlers() {
     }
   });
 
-  // ── Auto-timing preflight check (models + whisper language support) ──
+  // ── Auto-timing preflight check (python + ffmpeg availability) ──
 
-  ipcMain.handle(IPC.AUTO_TIMING_CHECK, () => {
-    const config = getResourceConfig();
-    const separateModelOk = !!findSeparateModel(config.modelDir);
-    const whisperDir = findWhisperModel(config.modelDir);
-    let whisperModelOk = !!whisperDir;
-    let whisperLanguages: Array<{ code: string; id: number }> = [];
-    if (whisperDir) {
-      try {
-        const vocabJson = JSON.parse(
-          fs.readFileSync(path.join(whisperDir, 'vocab.json'), 'utf-8'),
-        );
-        const tokenizerJson = JSON.parse(
-          fs.readFileSync(path.join(whisperDir, 'tokenizer.json'), 'utf-8'),
-        );
-        const tokenizer = new WhisperTokenizer(vocabJson, tokenizerJson);
-        whisperLanguages = tokenizer.languageTokens();
-        whisperModelOk = whisperLanguages.length > 0;
-      } catch {
-        whisperModelOk = false;
-      }
-    }
-    return {
-      separateModelOk,
-      whisperModelOk,
-      whisperLanguages,
-    };
-  });
+  ipcMain.handle(IPC.AUTO_TIMING_CHECK, () => getBackendStatus());
 
   // ── BPM detection via worker ──
 
@@ -487,6 +460,9 @@ app
     registerWindowHandlers();
     registerResourcesHandlers();
     createWindow();
+    // warm the backend validation cache so opening the auto-timing dialog
+    // doesn't re-spawn python (importing torch is slow)
+    void getBackendStatus();
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.

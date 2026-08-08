@@ -10,7 +10,9 @@ import {
   clearBeatTime,
   postSetBeat,
 } from '../../timing/operations';
-import inferSeparatorTimes from '../../timing/separator';
+import inferSeparatorTimes, {
+  scanAllPunctuations,
+} from '../../timing/separator';
 import { isSeparatorWord } from '../../editor/word';
 import { getBpmAtTime, snapToBpmGrid } from '../../timing';
 import {
@@ -23,7 +25,7 @@ import {
   getWavInfo,
   type SeparateResult,
 } from '../../timing/audio-analysis';
-import { alignSegmentsToLyrics } from '../../timing/whisper/align';
+import { applyCharTimesMap } from '../../timing/lyrics-align';
 import AutoTimingDialog from './AutoTimingDialog';
 import type { AutoTimingOptions } from './AutoTimingDialog';
 import { setSyllableTime, unsetSyllableTime } from '../../editor/syllable';
@@ -440,9 +442,8 @@ export default function TimingView({
     try {
       const check = await checkAutoTiming();
       const problems: string[] = [];
-      if (!check.separateModelOk) problems.push('缺少人声分离模型');
-      if (!check.whisperModelOk)
-        problems.push('缺少 whisper 模型或模型不支持多语言');
+      if (!check.pythonOk) problems.push('Python 环境不可用');
+      if (!check.ffmpegOk) problems.push('ffmpeg 不可用');
       if (problems.length > 0) {
         snack?.show(
           `自动打轴不可用：${problems.join('、')}，请检查「资源配置」`,
@@ -539,19 +540,31 @@ export default function TimingView({
           options.cleanVocal !== false
             ? { enabled: true, threshold: options.cleanThreshold ?? 12 }
             : { enabled: false, threshold: 0 };
-        const segments = await alignVocals(
+        // pass the full lyrics reading (syllable.reading concat) so stable-ts
+        // force-aligns our exact text onto the audio
+        const lyricsText = lyrics.readingPrompt();
+        const aligned = await alignVocals(
           sep.vocalsPath,
           options.languageToken,
+          lyricsText,
           clean,
           (p) => onAutoTimingProgressChange?.(p),
         );
+        const segments = aligned.segments;
         if (!segments || segments.length === 0) {
           snack?.show('whisper 未检测到有效内容');
           return;
         }
 
-        // 5. apply
-        alignSegmentsToLyrics(segments, lyrics);
+        // 5. apply — map stable-ts per-lyric-char times onto our syllables
+        if (
+          aligned.charTimesMap &&
+          Object.keys(aligned.charTimesMap).length > 0
+        ) {
+          applyCharTimesMap(lyrics, aligned.charTimesMap);
+        } else {
+          snack?.show('对齐失败：未获取到歌词字符时间');
+        }
         if (options.snapToBeat) {
           snapToBeatGrid(lyrics, state.fineTune.bpmSegments);
         }
@@ -560,6 +573,7 @@ export default function TimingView({
         for (let bi = 0; bi < refs.length; bi++) {
           inferSeparatorTimes(lyrics, bi);
         }
+        scanAllPunctuations(lyrics);
         onRequestRender?.();
         onUndoRecord?.();
         snack?.show(`自动打轴完成（${segments.length} 段）`);
@@ -644,6 +658,7 @@ export default function TimingView({
         inferSeparatorTimes(lyr, i, true);
       }
     });
+    scanAllPunctuations(lyr);
   }, []);
 
   // Scan all separator times on mount (initial load / view switch)
@@ -807,6 +822,7 @@ export default function TimingView({
       lyrics.setSyllableTime(wordIndex, sylIndex, {
         msec: Math.round(newTimeMs),
       });
+      scanAllPunctuations(lyrics);
       updateState({ ...state });
       onUndoRecord?.();
       onRequestRender?.();
@@ -1528,18 +1544,20 @@ export default function TimingView({
         />
       )}
       {/* Bottom bar */}
-      <div className="tv-bottom" style={{ position: 'relative' }}>
+      <div className="tv-bottom">
+        {audioDuration > 0 && (
+          <span className="tv-time">
+            {fmtSec(Math.round(currentTime / 1000))}
+            {' / '}
+            {fmtSec(Math.round(audioDuration / 1000))}
+          </span>
+        )}
         {autoTimingBusy &&
           autoTimingStage &&
           (autoTimingProgress ?? -1) >= 0 && (
             <div
               className="tv-progress"
               style={{
-                position: 'absolute',
-                left: '50%',
-                top: 0,
-                bottom: 0,
-                transform: 'translateX(-50%)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
@@ -1569,13 +1587,6 @@ export default function TimingView({
               </span>
             </div>
           )}
-        {audioDuration > 0 && (
-          <span className="tv-time">
-            {fmtSec(Math.round(currentTime / 1000))}
-            {' / '}
-            {fmtSec(Math.round(audioDuration / 1000))}
-          </span>
-        )}
         {state.selectedBeatIndex >= 0 && (
           <span className="tv-beat-info">
             Beat {state.selectedBeatIndex + 1}/{lyrics.getBeatRefs().length}

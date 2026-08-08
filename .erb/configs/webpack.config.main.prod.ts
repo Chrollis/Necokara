@@ -25,9 +25,7 @@ const configuration: webpack.Configuration = {
   entry: {
     main: path.join(webpackPaths.srcMainPath, 'main.ts'),
     preload: path.join(webpackPaths.srcMainPath, 'preload.ts'),
-    'separate-worker': path.join(webpackPaths.srcMainPath, 'separate-worker.ts'),
     'bpm-worker': path.join(webpackPaths.srcMainPath, 'bpm-worker.ts'),
-    'whisper-worker': path.join(webpackPaths.srcMainPath, 'whisper-worker.ts'),
   },
 
   output: {
